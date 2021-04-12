@@ -1,6 +1,6 @@
 # Run Spring Boot in Tomcat
 
-This repository shows how to create a WAR file from a Spring Boot 2.1 project for deployment in Tomcat.  Please read [Deploy a Spring Boot Application into Tomcat](https://developer.okta.com/blog/2019/04/16/spring-boot-tomcat) to see how this example was created.
+This repository shows how to create a WAR file from a Spring Boot 2.4 project for deployment in Tomcat.  Please read [Deploy a Spring Boot Application into Tomcat](https://developer.okta.com/blog/2019/04/16/spring-boot-tomcat) to see how this example was created.
 
 **Prerequisites:** [Java 11](https://adoptopenjdk.net/).
 
