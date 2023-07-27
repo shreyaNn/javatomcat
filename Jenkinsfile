@@ -33,7 +33,7 @@ pipeline {
         stage ('Deploy') {
             steps {
                 script {
-                    deploy adapters: [tomcat9(credentialsId: 'Tomcat-Stage-Credentials', path: '', url: 'http://10.0.255.11:8080')], contextPath: '/pipeline', onFailure: false, war: '/var/lib/jenkins/workspace/build-web-application-pipeline/target/*.war'
+                    deploy adapters: [tomcat9(credentialsId: 'Tomcat-Stage-Credentials', path: '', url: 'http://10.0.255.11:8080')], contextPath: '/pipeline', onFailure: false, war: '**/*.war'
                 }
             }
         }
