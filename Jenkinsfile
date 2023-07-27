@@ -12,5 +12,23 @@ pipeline {
                 }
             }
         }
+
+        stage(Test Application) {
+            steps {
+                echo 'Testing the Application'
+            }
+        }
+
+        stage(Nexus Deploy) {
+            steps {
+                echo 'Deploying Artifact to Nexus'
+            }
+        }
+
+        stage('Deploy to Staging Enviornment') {
+            steps {
+                build job: 'Deploy-Web-Application-Pipeline'
+            }
+        }
     }
 }
