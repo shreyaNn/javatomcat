@@ -13,13 +13,13 @@ pipeline {
             }
         }
 
-        stage(Test Application) {
+        stage('Test Application') {
             steps {
                 echo 'Testing the Application'
             }
         }
 
-        stage(Nexus Deploy) {
+        stage('Nexus Deploy') {
             steps {
                 echo 'Deploying Artifact to Nexus'
             }
