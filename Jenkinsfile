@@ -28,7 +28,7 @@ pipeline {
         stage ('Deploy to Staging Enviornment') {
             steps {
                 script {
-                    deploy adapters: [tomcat9(credentialsId: 'Tomcat-Stage-Credentials', path: '', url: 'http://10.0.255.11:8080')], contextPath: '/', onFailure: false, war: '**/*.war'
+                    deploy adapters: [tomcat9(credentialsId: 'tomcat-stage-credentials', path: '', url: 'http://172.31.31.14:8080')], contextPath: '/', onFailure: false, war: '**/*.war'
                 }
             }
         }
