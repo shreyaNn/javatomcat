@@ -19,7 +19,7 @@ pipeline {
             }
         }
 
-        Stage('Nexus Deploy') {
+        stage('Nexus Deploy') {
             steps {
                 echo 'Deploying Artifacts to Nexus'
             }
