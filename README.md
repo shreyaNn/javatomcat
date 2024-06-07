@@ -53,3 +53,5 @@ The application will be available on `http://localhost:8080`.
    </build>
    ```
 # java-tomcat-sample
+my goal project
+New line from shreya
