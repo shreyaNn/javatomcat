@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        //scannerHome = tool 'sonar-scanner'
+        scannerHome = tool 'sonar-scanner'
         SONAR_HOST_URL = 'http://localhost:9000' // Make sure this matches your SonarQube URL
         SONAR_LOGIN = credentials('sonartoken')
     }
