@@ -3,11 +3,8 @@ pipeline {
 
     environment {
         scannerHome = tool 'sonar-scanner'
-        nexusCredentialId = 'nexus-credentials' // Replace with your actual Nexus credentials ID
         nexusUrl = 'http://localhost:8081/repository/maven-releases/' // Replace with your actual Nexus repository URL
-        tomcatCredentialId = 'Tomcat-Stage-Crdedentials' // Replace with your actual Tomcat credentials ID
         tomcatUrl = 'http://172.31.24.171:8080' // Replace with your actual Tomcat URL
-        jenkinsSonar = credentials('jenkins-sonar') // Replace with your actual SonarQube token credential ID
     }
 
     stages {
@@ -24,18 +21,6 @@ pipeline {
             }
         }
 
-        stage('Build Application') {
-            steps {
-                sh 'mvn clean package'
-            }
-            post {
-                success {
-                    echo "Now Archiving the Artifact"
-                    archiveArtifacts artifacts: '**/*.war'
-                }
-            }
-        }
-
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -46,7 +31,7 @@ pipeline {
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.sources=. \
                                 -Dsonar.host.url=http://sonarqube:9000 \
-                                -Dsonar.login=${env.jenkinsSonar}
+                                -Dsonar.login=${env.JENKINS_SONAR}
                             """
                         }
                     } catch (Exception e) {
@@ -57,16 +42,28 @@ pipeline {
             }
         }
 
-        stage('JUnit Tests') {
+        stage('Build Application') {
             steps {
-                sh 'mvn test'
+                sh 'mvn -f pom.xml clean package'
+            }
+            post {
+                success {
+                    echo "Now Archiving the Artifact"
+                    archiveArtifacts artifacts: '**/*.war'
+                }
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                echo 'Testing the Application'
             }
         }
 
         stage('Nexus Deploy') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: nexusCredentialId)]) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-credentials', usernameVariable: 'NEXUS_USERNAME', passwordVariable: 'NEXUS_PASSWORD')]) {
                         sh """
                             mvn deploy:deploy-file \
                             -DgroupId=com.example \
@@ -76,8 +73,8 @@ pipeline {
                             -Dfile=target/*.war \
                             -DrepositoryId=nexus \
                             -Durl=${nexusUrl} \
-                            -Dusername=${env.NEXUS_USERNAME} \
-                            -Dpassword=${env.NEXUS_PASSWORD}
+                            -Dusername=${NEXUS_USERNAME} \
+                            -Dpassword=${NEXUS_PASSWORD}
                         """
                     }
                 }
@@ -87,7 +84,7 @@ pipeline {
         stage('Deploy to Staging Environment') {
             steps {
                 script {
-                    deploy adapters: [tomcat9(credentialsId: tomcatCredentialId, path: '', url: tomcatUrl)], contextPath: '/', onFailure: false, war: '**/*.war'
+                    deploy adapters: [tomcat9(credentialsId: 'Tomcat-Stage-Crdedentials', path: '', url: tomcatUrl)], contextPath: '/', onFailure: false, war: '**/*.war'
                 }
             }
         }
