@@ -1,8 +1,9 @@
 pipeline {
     agent any
     environment {
-        SONAR_TOKEN = credentials('sonartoken')
+        scannerHome = tool 'sonar-scanner'
     }
+
     stages {
         stage('Checkout') {
             steps {
@@ -16,7 +17,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -27,8 +28,8 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.sources=. \
-                                -Dsonar.host.url=http://localhost:9000 \
-                                -Dsonar.login=${SONAR_TOKEN}
+                                -Dsonar.host.url=http://sonarqube:9000 \
+                                -Dsonar.login=${env.JENKINS_SONAR}
                             """
                         }
                     } catch (Exception e) {
