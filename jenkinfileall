@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    environment {
+        scannerHome = tool 'sonar-scanner'
+        nexusCredentialId = 'nexus-credentials' // Replace with your actual Nexus credentials ID
+        nexusUrl = 'http://localhost:8081/repository/maven-releases/' // Replace with your actual Nexus repository URL
+        tomcatCredentialId = 'Tomcat-Stage-Crdedentials' // Replace with your actual Tomcat credentials ID
+        tomcatUrl = 'http://172.31.24.171:8080' // Replace with your actual Tomcat URL
+        jenkinsSonar = credentials('jenkins-sonar') // Replace with your actual SonarQube token credential ID
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    try {
+                        git branch: 'main', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                sh 'mvn clean package'
+            }
+            post {
+                success {
+                    echo "Now Archiving the Artifact"
+                    archiveArtifacts artifacts: '**/*.war'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    try {
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=javatomcat \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=http://sonarqube:9000 \
+                                -Dsonar.login=${env.jenkinsSonar}
+                            """
+                        }
+                    } catch (Exception e) {
+                        echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
+                        error "SonarQube Analysis failed"
+                    }
+                }
+            }
+        }
+
+        stage('JUnit Tests') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Nexus Deploy') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: nexusCredentialId)]) {
+                        sh """
+                            mvn deploy:deploy-file \
+                            -DgroupId=com.example \
+                            -DartifactId=javatomcat \
+                            -Dversion=1.0.0 \
+                            -Dpackaging=war \
+                            -Dfile=target/*.war \
+                            -DrepositoryId=nexus \
+                            -Durl=${nexusUrl} \
+                            -Dusername=${env.NEXUS_USERNAME} \
+                            -Dpassword=${env.NEXUS_PASSWORD}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Staging Environment') {
+            steps {
+                script {
+                    deploy adapters: [tomcat9(credentialsId: tomcatCredentialId, path: '', url: tomcatUrl)], contextPath: '/', onFailure: false, war: '**/*.war'
+                }
+            }
+        }
+    }
+}
