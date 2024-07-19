@@ -2,9 +2,13 @@ pipeline {
     agent any
 
     environment {
+        // Configure the SonarQube Scanner tool
         scannerHome = tool 'sonar-scanner'
-        nexusUrl = 'http://localhost:8081/repository/maven-releases/' // Replace with your actual Nexus repository URL
-        tomcatUrl = 'http://172.31.24.171:8080' // Replace with your actual Tomcat URL
+        // Define environment variables for SonarQube and Nexus
+        SONARQUBE_URL = 'http://sonarqube:9000'
+
+        NEXUS_URL = 'http://localhost:8081/repository/maven-releases/'
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials-id' // Replace with your Nexus credentials ID
     }
 
     stages {
@@ -21,10 +25,24 @@ pipeline {
             }
         }
 
+        stage('Build') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn clean package'
+                    } catch (Exception e) {
+                        echo "Build failed. Error: ${e.getMessage()}"
+                        error "Build failed"
+                    }
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
                     try {
+                        def scannerHome = tool 'sonar-scanner'
                         withSonarQubeEnv('SonarQube') {
                             sh """
                                 ${scannerHome}/bin/sonar-scanner \
@@ -42,49 +60,32 @@ pipeline {
             }
         }
 
-        stage('Build Application') {
-            steps {
-                sh 'mvn -f pom.xml clean package'
-            }
-            post {
-                success {
-                    echo "Now Archiving the Artifact"
-                    archiveArtifacts artifacts: '**/*.war'
-                }
-            }
-        }
-
-        stage('Test Application') {
-            steps {
-                echo 'Testing the Application'
-            }
-        }
-
-        stage('Nexus Deploy') {
+        stage('Push to Nexus') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-credentials', usernameVariable: 'NEXUS_USERNAME', passwordVariable: 'NEXUS_PASSWORD')]) {
-                        sh """
-                            mvn deploy:deploy-file \
-                            -DgroupId=com.example \
-                            -DartifactId=javatomcat \
-                            -Dversion=1.0.0 \
-                            -Dpackaging=war \
-                            -Dfile=target/*.war \
-                            -DrepositoryId=nexus \
-                            -Durl=${nexusUrl} \
-                            -Dusername=${NEXUS_USERNAME} \
-                            -Dpassword=${NEXUS_PASSWORD}
-                        """
+                    try {
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'localhost:8081',
+                            groupId: pom.groupId,
+                            version: version,
+                            repository: 'maven-releases',
+                            credentialsId: env.NEXUS_CREDENTIALS_ID,
+                            artifacts: [
+                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                            ]
+                        )
+                    } catch (Exception e) {
+                        echo "Push to Nexus failed. Error: ${e.getMessage()}"
+                        error "Push to Nexus failed"
                     }
-                }
-            }
-        }
-
-        stage('Deploy to Staging Environment') {
-            steps {
-                script {
-                    deploy adapters: [tomcat9(credentialsId: 'Tomcat-Stage-Crdedentials', path: '', url: tomcatUrl)], contextPath: '/', onFailure: false, war: '**/*.war'
                 }
             }
         }
