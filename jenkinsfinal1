@@ -1,13 +1,11 @@
 pipeline {
-  agent { label 'jenkins-agent' }
+    agent { label 'jenkins-agent' }
     environment {
-        // Configure the SonarQube Scanner tool
-        scannerHome = tool 'sonar-scanner'
-        // Define environment variables for SonarQube and Nexus
+        scannerHome = '/opt/sonar-scanner-5.0.1' // Define SonarQube Scanner installation path
         SONARQUBE_URL = 'http://sonarqube:9000'
         NEXUS_URL = 'http://nexus:8081/repository/maven-releases/'
-        NEXUS_CREDENTIALS_ID = 'nexus-credentials' // Replace with your Nexus credentials ID
-        JENKINS_SONAR = credentials('sonartoken') // Add this credential in Jenkins
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials'
+        JENKINS_SONAR = credentials('sonartoken')
     }
     stages {
         stage('Checkout') {
