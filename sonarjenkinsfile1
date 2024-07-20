@@ -2,6 +2,8 @@ pipeline {
     agent any
     environment {
         scannerHome = tool 'sonar-scanner'
+        JAVA_HOME = '/opt/java/openjdk'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
     stages {
@@ -17,6 +19,12 @@ pipeline {
                 }
             }
         }
+        stage('Verify Java Version') {
+            steps {
+                sh 'echo $JAVA_HOME'
+                sh '$JAVA_HOME/bin/java -version'
+    }
+}
 
         stage('SonarQube Analysis') {
             steps {
