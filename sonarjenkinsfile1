@@ -1,10 +1,7 @@
 pipeline {
-    agent any
+    agent { label 'jenkins-agent' } // Replace 'your-agent-label' with the actual label of your Jenkins agent node
     environment {
-        //scannerHome = tool 'sonar-scanner'
-        JAVA_HOME = '/opt/java/openjdk'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-        scannerHome = '/opt/sonar-scanner-5.0.1' 
+        scannerHome = tool 'sonar-scanner'
     }
 
     stages {
@@ -20,24 +17,18 @@ pipeline {
                 }
             }
         }
-        stage('Verify Java Version') {
-            steps {
-                sh 'echo $JAVA_HOME'
-                sh '$JAVA_HOME/bin/java -version'
-    }
-}
 
         stage('SonarQube Analysis') {
             steps {
                 script {
                     try {
-                       // def scannerHome = tool 'sonar-scanner'
+                        def scannerHome = tool 'sonar-scanner'
                         withSonarQubeEnv('SonarQube') {
                             sh """
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.sources=. \
-                                -Dsonar.host.url=http://sonarqube:9000 \
+                                -Dsonar.host.url=http://localhost:9000 \
                                 -Dsonar.login=${env.JENKINS_SONAR}
                             """
                         }
