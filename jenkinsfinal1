@@ -1,8 +1,8 @@
 pipeline {
     agent { label 'jenkins-agent' }
     environment {
-        scannerHome = '/opt/sonar-scanner-5.0.1' // Define SonarQube Scanner installation path
-        SONARQUBE_URL = 'http://sonarqube:9000'
+        scannerHome = tool 'sonar-scanner'
+        SONARQUBE_URL = 'http://localhost:9000'
         NEXUS_URL = 'http://nexus:8081/repository/maven-releases/'
         NEXUS_CREDENTIALS_ID = 'nexus-credentials'
         JENKINS_SONAR = credentials('sonartoken')
