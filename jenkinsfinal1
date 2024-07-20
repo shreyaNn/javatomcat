@@ -67,7 +67,7 @@ pipeline {
                             nexusUrl: 'nexus:8081',
                             groupId: pom.groupId,
                             version: version,
-                            repository: 'maven-releases',
+                            repository: 'maven-snapshots',
                             credentialsId: env.NEXUS_CREDENTIALS_ID,
                             artifacts: [
                                 [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
