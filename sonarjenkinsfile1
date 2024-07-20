@@ -31,13 +31,13 @@ pipeline {
             steps {
                 script {
                     try {
-                        def scannerHome = tool 'sonar-scanner'
+                       // def scannerHome = tool 'sonar-scanner'
                         withSonarQubeEnv('SonarQube') {
                             sh """
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.sources=. \
-                                -Dsonar.host.url=http://localhost:9000 \
+                                -Dsonar.host.url=http://sonarqube:9000 \
                                 -Dsonar.login=${env.JENKINS_SONAR}
                             """
                         }
