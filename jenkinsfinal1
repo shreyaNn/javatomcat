@@ -61,6 +61,9 @@ pipeline {
                         def version = pom.version
                         def packaging = pom.packaging
                         def filePath = "target/${artifactId}-${version}.${packaging}"
+                           // Debugging statement
+                        echo "Deploying file: ${filePath}"
+                        sh "ls -l ${filePath}"
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
