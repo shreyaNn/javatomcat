@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        label 'docker-agent'  // Use the label you assigned to your Docker agent
-    }
+  agent { label 'jenkins-agent' }
     environment {
         // Configure the SonarQube Scanner tool
         scannerHome = tool 'sonar-scanner'
