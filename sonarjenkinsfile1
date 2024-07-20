@@ -1,9 +1,10 @@
 pipeline {
     agent any
     environment {
-        scannerHome = tool 'sonar-scanner'
+        //scannerHome = tool 'sonar-scanner'
         JAVA_HOME = '/opt/java/openjdk'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        scannerHome = '/opt/sonar-scanner-5.0.1' 
     }
 
     stages {
