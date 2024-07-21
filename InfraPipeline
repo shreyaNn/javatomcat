@@ -1,1 +1,53 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_DEFAULT_REGION = 'ap-south-1' // Adjust as needed
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout the repository containing your Terraform scripts
+                git 'https://github.com/shreyaNn/javatomcat.git'
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                script {
+                    dir('Infra') {
+                        sh 'terraform init'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                script {
+                    dir('Infra') {
+                        sh 'terraform plan -var-file=prod.tfvars'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                script {
+                    dir('Infra') {
+                        sh 'terraform apply -var-file=prod.tfvars -auto-approve'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Terraform script execution complete.'
+        }
+    }
+}
 
