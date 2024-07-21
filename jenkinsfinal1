@@ -37,14 +37,16 @@ pipeline {
                 script {
                     try {
                         sh 'mvn test'
+                        sh 'ls -R target/surefire-reports'  // List contents of surefire-reports directory
                         junit '**/target/surefire-reports/*.xml'
-                    } catch (Exception e) {
+            }       catch (Exception e) {
                         echo "Unit tests failed. Error: ${e.getMessage()}"
+                        sh 'cat target/surefire-reports/*.txt'  // Print contents of surefire report files
                         error "Unit tests failed"
-                    }
-                }
             }
         }
+    }
+}
         stage('SonarQube Analysis') {
             steps {
                 script {
