@@ -13,7 +13,8 @@ pipeline {
                 script {
                     try {
                         git branch: 'main', url: 'https://github.com/shreyaNn/javatomcat.git'
-                    } catch (Exception e) {
+                    }
+                    catch (Exception e) {
                         echo "Failed to checkout. Error: ${e.getMessage()}"
                         error "Repository checkout failed"
                     }
