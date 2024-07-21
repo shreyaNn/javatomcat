@@ -26,13 +26,13 @@ pipeline {
                 script {
                     try {
                         //Clean, build, and package the application
-                        sh 'mvn clean package -B --settings /home/jenkins/agent/maven-settings.xml'
+                        sh 'mvn clean package -B --settings /root/.m2/settings.xml'
         
                         // Check if the WAR file is generated
                         sh 'ls -ltr target/'
         
                         // Run unit tests and publish test results
-                        sh 'mvn test -B --settings /home/jenkins/agent/maven-settings.xml'
+                        sh 'mvn test -B --settings /root/.m2/settings.xml'
                         junit '**/target/surefire-reports/TEST-*.xml'
             }       catch (Exception e) {
                         echo "Build or unit tests failed. Error: ${e.getMessage()}"
