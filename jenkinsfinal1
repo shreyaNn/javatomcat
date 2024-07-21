@@ -41,6 +41,7 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.sources=. \
+                                -Dsonar.scm.provider=git \
                                 -Dsonar.host.url=${SONARQUBE_URL} \
                                 -Dsonar.token=${JENKINS_SONAR}
                             """
