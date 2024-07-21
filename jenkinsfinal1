@@ -25,22 +25,22 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Clean, build, and package the application
-                        sh 'mvn clean package -B'
-                
+                        //Clean, build, and package the application
+                        sh 'mvn clean package -B --settings /home/jenkins/agent/maven-settings.xml'
+        
                         // Check if the WAR file is generated
                         sh 'ls -ltr target/'
-                
+        
                         // Run unit tests and publish test results
-                        sh 'mvn test -B'
+                        sh 'mvn test -B --settings /home/jenkins/agent/maven-settings.xml'
                         junit '**/target/surefire-reports/TEST-*.xml'
-                    } catch (Exception e) {
+            }       catch (Exception e) {
                         echo "Build or unit tests failed. Error: ${e.getMessage()}"
                         error "Build or unit tests failed"
-                    }
-                }
             }
         }
+    }
+}
         stage('SonarQube Analysis') {
             steps {
                 script {
