@@ -20,30 +20,26 @@ pipeline {
                 }
             }
         }
-       stage('Build and Unit Test') {
+        stage('Build and Unit Test') {
              steps {
                  script {
                      try {
-                         sh 'mvn -version'
-                         sh 'mvn clean test -B -X'  // Run unit tests
-                         sh 'ls -R target/surefire-reports'  // List unit test reports
-                         junit '**/target/surefire-reports/TEST-*.xml'  // Publish unit test results
+                         sh 'mvn clean test -B'
+                         junit '**/target/surefire-reports/TEST-*.xml'
                      } catch (Exception e) {
                          echo "Build or unit tests failed. Error: ${e.getMessage()}"
-                         sh 'cat target/surefire-reports/*.txt'
                          error "Build or unit tests failed"
                      }
                  }
              }
         }
-        
         stage('SonarQube Analysis') {
             steps {
                 script {
                     try {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                ${scannerHome}/bin/sonar-scanner -X \
+                                ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.host.url=${SONARQUBE_URL} \
                                 -Dsonar.token=${JENKINS_SONAR}
@@ -65,9 +61,6 @@ pipeline {
                         def version = pom.version
                         def packaging = pom.packaging
                         def filePath = "target/${artifactId}-${version}.${packaging}"
-                           // Debugging statement
-                        echo "Deploying file: ${filePath}"
-                        sh "ls -l ${filePath}"
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
