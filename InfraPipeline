@@ -1,47 +1,54 @@
 pipeline {
     agent any
+    
     environment {
-        AWS_DEFAULT_REGION = 'ap-south-1'
-        TF_IN_AUTOMATION = 'true'
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
     }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+        
         stage('Terraform Init') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-                    dir('Infra') {
-                        sh 'terraform init'
-                    }
+                dir('Infra') {
+                    sh 'terraform init'
                 }
             }
         }
+        
         stage('Terraform Plan') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-                    dir('Infra') {
-                        sh 'terraform plan -var-file=prod.tfvars -out=tfplan'
-                    }
+                dir('Infra') {
+                    sh 'terraform plan -out=tfplan'
                 }
             }
         }
+        
+        stage('Approval') {
+            steps {
+                input message: 'Apply the terraform plan?'
+            }
+        }
+        
         stage('Terraform Apply') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-                    dir('Infra') {
-                        sh 'terraform apply -auto-approve tfplan'
-                    }
+                dir('Infra') {
+                    sh 'terraform apply -auto-approve tfplan'
                 }
             }
         }
     }
+    
     post {
         always {
-            echo 'Terraform script execution complete.'
-            cleanWs()
+            dir('Infra') {
+                sh 'terraform output'
+            }
         }
     }
 }
