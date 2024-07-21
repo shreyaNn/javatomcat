@@ -50,9 +50,7 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
                                 -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.token=${JENKINS_SONAR} \
-                                -Dsonar.java.binaries=target/classes \
-                                -Dsonar.java.libraries=/path/to/your/dependencies/**/*.jar
+                                -Dsonar.token=${JENKINS_SONAR}
                             """
                         }
                     } catch (Exception e) {
