@@ -3,7 +3,7 @@ pipeline {
     environment {
         scannerHome = tool 'sonar-scanner'
         SONARQUBE_URL = 'http://localhost:9000'
-        NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
+        NEXUS_URL = 'http://nexus:8081/repository/maven-snapshots/'
         NEXUS_CREDENTIALS_ID = 'nexus-credentials'
         JENKINS_SONAR = credentials('sonartoken')
     }
@@ -72,7 +72,7 @@ pipeline {
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
-                            nexusUrl: 'http://localhost:8081',
+                            nexusUrl: 'http://nexus:8081',
                             groupId: pom.groupId,
                             version: version,
                             repository: 'maven-snapshots',
