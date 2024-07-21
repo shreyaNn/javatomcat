@@ -38,12 +38,9 @@ pipeline {
                     try {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=javatomcat \
-                                -Dsonar.sources=. \
-                                -Dsonar.scm.provider=git \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.token=${JENKINS_SONAR}
+                               ${scannerHome}/bin/sonar-scanner \
+                               -Dsonar.projectKey=javatomcat \
+                               -Dsonar.token=${JENKINS_SONAR}
                             """
                         }
                     } catch (Exception e) {
