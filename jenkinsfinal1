@@ -21,22 +21,18 @@ pipeline {
             }
         }
 
-        stage('Build and Unit Test') {
-            steps {
-                script {
-                    try {
-                        //Clean, build, and package the application
-                        sh 'mvn clean package -B --settings /root/.m2/settings.xml'
-        
-                        // Check if the WAR file is generated
-                        sh 'ls -ltr target/'
-        
-                        // Run unit tests and publish test results
-                        sh 'mvn test -B --settings /root/.m2/settings.xml'
-                        junit '**/target/surefire-reports/TEST-*.xml'
-            }       catch (Exception e) {
-                        echo "Build or unit tests failed. Error: ${e.getMessage()}"
-                        error "Build or unit tests failed"
+       stage('Build and Unit Test') {
+           steps {
+               script {
+                   try {
+                       sh 'mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package -B --settings /root/.m2/settings.xml'
+                       sh 'ls -ltr target/'
+                       sh 'mvn test -B --settings /root/.m2/settings.xml'
+                       junit '**/target/surefire-reports/TEST-*.xml'
+                  }catch (Exception e) {
+                       echo "Build or unit tests failed. Error: ${e.getMessage()}"
+                       echo "Stack trace: ${e.getStackTrace().join('\n')}"
+                       error "Build or unit tests failed"
             }
         }
     }
