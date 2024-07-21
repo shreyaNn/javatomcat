@@ -13,31 +13,29 @@ pipeline {
                 script {
                     try {
                         git branch: 'main', url: 'https://github.com/shreyaNn/javatomcat.git'
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                         echo "Failed to checkout. Error: ${e.getMessage()}"
                         error "Repository checkout failed"
                     }
                 }
             }
         }
-
-       stage('Build and Unit Test') {
-           steps {
-               script {
-                   try {
-                       sh 'mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package -B --settings /root/.m2/settings.xml'
-                       sh 'ls -ltr target/'
-                       sh 'mvn test -B --settings /root/.m2/settings.xml'
-                       junit '**/target/surefire-reports/TEST-*.xml'
-                  }catch (Exception e) {
-                       echo "Build or unit tests failed. Error: ${e.getMessage()}"
-                       echo "Stack trace: ${e.getStackTrace().join('\n')}"
-                       error "Build or unit tests failed"
+        stage('Build and Unit Test') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package -B --settings /root/.m2/settings.xml'
+                        sh 'ls -ltr target/'
+                        sh 'mvn test -B --settings /root/.m2/settings.xml'
+                        junit '**/target/surefire-reports/TEST-*.xml'
+                    } catch (Exception e) {
+                        echo "Build or unit tests failed. Error: ${e.getMessage()}"
+                        echo "Stack trace: ${e.getStackTrace()[0]}"
+                        error "Build or unit tests failed"
+                    }
+                }
             }
         }
-    }
-}
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -87,7 +85,6 @@ pipeline {
         }
     }
     post {
-        
         success {
             echo 'Pipeline executed successfully!'
         }
