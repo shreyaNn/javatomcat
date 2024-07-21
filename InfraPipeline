@@ -1,53 +1,47 @@
 pipeline {
     agent any
-
     environment {
-        AWS_DEFAULT_REGION = 'ap-south-1' // Adjust as needed
+        AWS_DEFAULT_REGION = 'ap-south-1'
+        TF_IN_AUTOMATION = 'true'
     }
-
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the repository containing your Terraform scripts
-                git 'https://github.com/shreyaNn/javatomcat.git'
+                checkout scm
             }
         }
-
         stage('Terraform Init') {
             steps {
-                script {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     dir('Infra') {
                         sh 'terraform init'
                     }
                 }
             }
         }
-
         stage('Terraform Plan') {
             steps {
-                script {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     dir('Infra') {
-                        sh 'terraform plan -var-file=prod.tfvars'
+                        sh 'terraform plan -var-file=prod.tfvars -out=tfplan'
                     }
                 }
             }
         }
-
         stage('Terraform Apply') {
             steps {
-                script {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     dir('Infra') {
-                        sh 'terraform apply -var-file=prod.tfvars -auto-approve'
+                        sh 'terraform apply -auto-approve tfplan'
                     }
                 }
             }
         }
     }
-
     post {
         always {
             echo 'Terraform script execution complete.'
+            cleanWs()
         }
     }
 }
-
