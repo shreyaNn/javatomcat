@@ -24,9 +24,9 @@ pipeline {
              steps {
                  script {
                      try {
-                         sh 'mvn clean verify'  // This will compile, run tests, and generate reports
-                         sh 'ls -R target/surefire-reports'
-                         junit '**/target/surefire-reports/*.xml'
+                         sh 'mvn -version'
+                         sh 'mvn clean verify -X'  // Added -X for debug output
+                         sh 'ls -R target'  // List all contents of target directory
                 }        catch (Exception e) {
                          echo "Build or tests failed. Error: ${e.getMessage()}"
                          sh 'cat target/surefire-reports/*.txt'
