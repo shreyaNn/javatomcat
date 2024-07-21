@@ -81,4 +81,14 @@ pipeline {
             }
         }
     }
+post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
 }
