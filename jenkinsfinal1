@@ -21,17 +21,17 @@ pipeline {
             }
         }
         stage('Build and Unit Test') {
-             steps {
-                 script {
-                     try {
-                         sh 'mvn clean test -B'
-                         junit '**/target/surefire-reports/TEST-*.xml'
-                     } catch (Exception e) {
-                         echo "Build or unit tests failed. Error: ${e.getMessage()}"
-                         error "Build or unit tests failed"
-                     }
-                 }
-             }
+            steps {
+                script {
+                    try {
+                        sh 'mvn clean test -B'
+                        junit '**/target/surefire-reports/TEST-*.xml'
+                    } catch (Exception e) {
+                        echo "Build or unit tests failed. Error: ${e.getMessage()}"
+                        error "Build or unit tests failed"
+                    }
+                }
+            }
         }
         stage('SonarQube Analysis') {
             steps {
@@ -81,7 +81,7 @@ pipeline {
             }
         }
     }
-post {
+    post {
         always {
             cleanWs()
         }
@@ -91,4 +91,5 @@ post {
         failure {
             echo 'Pipeline failed!'
         }
+    }
 }
