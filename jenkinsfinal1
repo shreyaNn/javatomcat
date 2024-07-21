@@ -20,47 +20,30 @@ pipeline {
                 }
             }
         }
-        stage('Build') {
-            steps {
-                script {
-                    try {
-                        sh 'mvn clean package'
-                    } catch (Exception e) {
-                        echo "Build failed. Error: ${e.getMessage()}"
-                        error "Build failed"
+        stage('Build and Test') {
+             steps {
+                 script {
+                     try {
+                         sh 'mvn clean verify'  // This will compile, run tests, and generate reports
+                         sh 'ls -R target/surefire-reports'
+                         junit '**/target/surefire-reports/*.xml'
+                }        catch (Exception e) {
+                         echo "Build or tests failed. Error: ${e.getMessage()}"
+                         sh 'cat target/surefire-reports/*.txt'
+                         error "Build or tests failed"
                     }
                 }
-            }
+              }
         }
-        stage('Unit Tests') {
-            steps {
-                script {
-                    try {
-                        sh 'mvn test'
-                        sh 'ls -R target/surefire-reports'  // List contents of surefire-reports directory
-                        junit '**/target/surefire-reports/*.xml'
-            }       catch (Exception e) {
-                        echo "Unit tests failed. Error: ${e.getMessage()}"
-                        sh 'cat target/surefire-reports/*.txt'  // Print contents of surefire report files
-                        error "Unit tests failed"
-            }
-        }
-    }
-}
+        
         stage('SonarQube Analysis') {
             steps {
                 script {
                     try {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                               ${scannerHome}/bin/sonar-scanner \
+                                ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=javatomcat \
-                                -Dsonar.sources=src/main/java \
-                                -Dsonar.tests=src/test/java \
-                                -Dsonar.java.binaries=target/classes \
-                                -Dsonar.junit.reportPaths=target/surefire-reports \
-                                -Dsonar.java.coveragePlugin=jacoco \
-                                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
                                 -Dsonar.host.url=${SONARQUBE_URL} \
                                 -Dsonar.token=${JENKINS_SONAR}
                             """
