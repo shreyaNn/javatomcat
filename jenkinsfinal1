@@ -25,7 +25,7 @@ pipeline {
                  script {
                      try {
                          sh 'mvn -version'
-                         sh 'mvn clean test'  // Run unit tests
+                         sh 'mvn clean test -B -X'  // Run unit tests
                          sh 'ls -R target/surefire-reports'  // List unit test reports
                          junit '**/target/surefire-reports/TEST-*.xml'  // Publish unit test results
                      } catch (Exception e) {
