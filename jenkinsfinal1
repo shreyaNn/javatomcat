@@ -39,7 +39,6 @@ pipeline {
                         withSonarQubeEnv('SonarQube') {
                             sh """
                                ${scannerHome}/bin/sonar-scanner \
-                               -Dsonar.projectKey=javatomcat \
                                -Dsonar.token=${JENKINS_SONAR}
                             """
                         }
