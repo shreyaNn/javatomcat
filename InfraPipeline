@@ -19,7 +19,7 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     dir('Infra') {
-                        sh 'terraform init'
+                        sh 'terraform init -reconfigure'
                         sh 'terraform plan -var-file="prod.tfvars" -out=tfplan'
                         
                         input message: 'Apply the terraform plan?', ok: 'Apply'
