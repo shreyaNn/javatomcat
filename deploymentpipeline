@@ -1,9 +1,6 @@
 pipeline {
     agent {
-        dockerfile {
-            filename 'Dockerfile'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
+        label 'ansible-deploy' // Use the node with the label 'ansible-deploy'
     }
     
     environment {
@@ -12,44 +9,56 @@ pipeline {
         BUILD_VERSION = "${env.BUILD_NUMBER}"
         TEST_CONTAINER = 'test-container'
         PROD_SERVER = 'your-ec2-server'
+        SSH_KEY_PATH = '/path/to/your-key.pem'  // Path to your SSH private key
+        PROD_USER = 'ubuntu'  // Adjust the username if needed
     }
     
     stages {
         stage('Pull from Nexus') {
             steps {
-                sh "wget ${NEXUS_URL}/repository/your-repo/${JAR_NAME}-${BUILD_VERSION}.jar -O ${JAR_NAME}"
+                script {
+                    sh "wget ${NEXUS_URL}/repository/your-repo/${JAR_NAME}-${BUILD_VERSION}.jar -O ${JAR_NAME}-${BUILD_VERSION}.jar"
+                }
             }
         }
         
         stage('Deploy to Test') {
             steps {
-                sh """
-                docker run -d --name ${TEST_CONTAINER} ubuntu
-                docker cp ${JAR_NAME} ${TEST_CONTAINER}:/opt/myjarfile/build${BUILD_VERSION}.jar
-                """
+                script {
+                    sh """
+                    docker run -d --name ${TEST_CONTAINER} ubuntu sleep infinity
+                    docker cp ${JAR_NAME}-${BUILD_VERSION}.jar ${TEST_CONTAINER}:/opt/myjarfile/build${BUILD_VERSION}.jar
+                    """
+                }
             }
         }
         
         stage('Run Tests') {
             steps {
-                // This is a placeholder for your Selenium test
-                sh 'echo "Running Selenium tests..."'
-                // Add your actual Selenium test command here
+                script {
+                    // Placeholder for Selenium tests
+                    sh 'echo "Running Selenium tests..."'
+                    // Add your actual Selenium test command here
+                }
             }
         }
         
         stage('Deploy to Production') {
             steps {
-                // Using scp for simplicity, but you can replace this with an Ansible playbook
-                sh "scp ${JAR_NAME} ubuntu@${PROD_SERVER}:/opt/myjarfile/build${BUILD_VERSION}.jar"
+                script {
+                    // Using SCP to deploy to EC2
+                    sh "scp -i ${SSH_KEY_PATH} ${JAR_NAME}-${BUILD_VERSION}.jar ${PROD_USER}@${PROD_SERVER}:/opt/myjarfile/build${BUILD_VERSION}.jar"
+                }
             }
         }
     }
     
     post {
         always {
-            sh "docker stop ${TEST_CONTAINER} || true"
-            sh "docker rm ${TEST_CONTAINER} || true"
+            script {
+                sh "docker stop ${TEST_CONTAINER} || true"
+                sh "docker rm ${TEST_CONTAINER} || true"
+            }
         }
     }
 }
