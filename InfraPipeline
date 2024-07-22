@@ -20,11 +20,11 @@ pipeline {
                 ]]) {
                     dir('Infra') {
                         sh 'terraform init'
-                        sh 'terraform plan -out=tfplan'
+                        sh 'terraform plan -var-file="prod.tfvars" -out=tfplan'
                         
-                        input message: 'Apply the terraform plan?'
+                        input message: 'Apply the terraform plan?', ok: 'Apply'
                         
-                        sh 'terraform apply -auto-approve tfplan'
+                        sh 'terraform apply -var-file="prod.tfvars" -auto-approve tfplan'
                     }
                 }
             }
