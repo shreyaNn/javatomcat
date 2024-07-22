@@ -46,10 +46,12 @@ pipeline {
         }
     }
     
-    post {
+        post {
         always {
-            dir('Infra') {
-                sh 'terraform output'
+            node {
+                dir('Infra') {
+                    sh 'terraform output'
+                }
             }
         }
     }
