@@ -1,84 +1,64 @@
 pipeline {
-    agent { label 'jenkins-agent' }
+    agent { label 'jenkins-agent-with-ansible' }
     environment {
-        NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
+        NEXUS_URL = 'http://nexus:8081/repository/maven-releases/'
         NEXUS_CREDENTIALS_ID = 'nexus-credentials'
-        JAR_NAME = 'app'
+        ARTIFACT_NAME = 'your-artifact'
         BUILD_VERSION = "${env.BUILD_NUMBER}"
-        TEST_CONTAINER = 'selenium-node-chrome'
+        TEST_CONTAINER = 'test-ubuntu'
         PROD_SERVER = 'your-ec2-server'
         PROD_USER = 'ubuntu'
-        PROD_PATH = "/opt/myjarfile/build${BUILD_VERSION}.jar"
-        TEST_PATH = "/opt/myjarfile/build${BUILD_VERSION}.jar"
+        ANSIBLE_PATH = "/home/jenkins/ansible-agent/ansible-java-app-setup"
     }
     stages {
-        stage('Pull JAR from Nexus') {
+        stage('Pull WAR from Nexus') {
             steps {
                 script {
-                    try {
-                        withCredentials([usernamePassword(credentialsId: NEXUS_CREDENTIALS_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                            sh """
-                                curl -u ${NEXUS_USER}:${NEXUS_PASS} -O "${NEXUS_URL}/${JAR_NAME}/2.0-SNAPSHOT/${JAR_NAME}-2.0-${BUILD_VERSION}.jar"
-                                mv ${JAR_NAME}-2.0-${BUILD_VERSION}.jar build${BUILD_VERSION}.jar
-                            """
-                        }
-                    } catch (Exception e) {
-                        echo "Failed to pull JAR file from Nexus. Error: ${e.getMessage()}"
-                        error "Failed to pull JAR file from Nexus"
+                    withCredentials([usernamePassword(credentialsId: NEXUS_CREDENTIALS_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh """
+                            curl -u ${NEXUS_USER}:${NEXUS_PASS} -O "${NEXUS_URL}/com/yourcompany/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war"
+                        """
                     }
                 }
             }
         }
         stage('Deploy to Test') {
-            agent { label 'ansible-deploy' }
             steps {
                 script {
-                    try {
-                        // Start or run the test container
-                        sh """
-                            docker start ${TEST_CONTAINER} || docker run -d --name ${TEST_CONTAINER} selenium/node-chrome
-                            docker cp build${BUILD_VERSION}.jar ${TEST_CONTAINER}:${TEST_PATH}
-                        """
-                    } catch (Exception e) {
-                        echo "Failed to deploy JAR file to test container. Error: ${e.getMessage()}"
-                        error "Failed to deploy JAR file to test container"
-                    }
+                    sh """
+                        docker start ${TEST_CONTAINER} || docker run -d --name ${TEST_CONTAINER} ubuntu
+                        docker cp ${ARTIFACT_NAME}-${BUILD_VERSION}.war ${TEST_CONTAINER}:/opt/myjarfile/build1.war
+                        docker exec ${TEST_CONTAINER} apt-get update
+                        docker exec ${TEST_CONTAINER} apt-get install -y openjdk-11-jdk
+                        docker exec ${TEST_CONTAINER} java -jar /opt/myjarfile/build1.war &
+                    """
                 }
             }
         }
         stage('Run Tests') {
-            agent { label 'ansible-deploy' }
             steps {
                 script {
-                    try {
-                        // Run Selenium tests
-                        sh 'echo "Running Selenium tests on Selenium Grid..."'
-                        // Example command to run Selenium tests; adjust as needed
-                        // sh 'docker exec ${TEST_CONTAINER} java -jar /path/to/selenium-tests.jar'
-                    } catch (Exception e) {
-                        echo "Testing failed. Error: ${e.getMessage()}"
-                        error "Testing failed"
-                    }
+                    sh """
+                        # Add your Selenium test case here
+                        echo "Running Selenium test case..."
+                        # Example: docker run --network host selenium/standalone-chrome java -jar your-selenium-tests.jar
+                    """
                 }
             }
         }
         stage('Deploy to Production') {
-            agent { label 'ansible-deploy' }
             steps {
                 script {
-                    try {
-                        // Copy the JAR file to the Ansible node if needed
-                        sh "cp build${BUILD_VERSION}.jar /path/to/ansible-java-app-setup/"
-                        // Run Ansible playbook
-                        dir("/path/to/ansible-java-app-setup") {
-                            sh """
-                                ansible-playbook playbooks/deploy_app.yml \
-                                --extra-vars "jar_path=build${BUILD_VERSION}.jar prod_server=${PROD_SERVER} prod_path=${PROD_PATH} prod_user=${PROD_USER}"
-                            """
-                        }
-                    } catch (Exception e) {
-                        echo "Failed to deploy JAR file to production using Ansible. Error: ${e.getMessage()}"
-                        error "Failed to deploy JAR file to production using Ansible"
+                    // Copy the WAR file to the Ansible directory
+                    sh "cp ${ARTIFACT_NAME}-${BUILD_VERSION}.war ${ANSIBLE_PATH}/roles/java_app/files/"
+                    
+                    // Run the Ansible playbook
+                    dir(ANSIBLE_PATH) {
+                        ansiblePlaybook(
+                            playbook: 'deploy_app.yml',
+                            inventory: 'inventory',
+                            extras: "-e \"build_version=${BUILD_VERSION} prod_server=${PROD_SERVER} prod_user=${PROD_USER}\""
+                        )
                     }
                 }
             }
@@ -87,10 +67,7 @@ pipeline {
     post {
         always {
             script {
-                // Stop the test container if it was started
-                sh """
-                    docker stop ${TEST_CONTAINER} || true
-                """
+                sh "docker stop ${TEST_CONTAINER} || true"
             }
         }
     }
