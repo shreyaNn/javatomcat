@@ -9,9 +9,11 @@ data "aws_vpc" "default" {
 
 # Get the default subnet
 data "aws_subnets" "default" {
-  vpc_id = data.aws_vpc.default.id
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
 }
-
+}
 # Get the default AMI for Amazon Linux
 data "aws_ami" "amazon_linux" {
   most_recent = true
