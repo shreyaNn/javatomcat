@@ -60,6 +60,7 @@ resource "aws_instance" "default" {
   instance_type         = var.instance_type
   subnet_id              = element(data.aws_subnets.default.ids, 0)
   vpc_security_group_ids = [aws_security_group.default_sg.id]
+  key_name              = var.key_name  # Associate the SSH key pair
   tags = {
     Name = "default-ec2-instance"
   }
