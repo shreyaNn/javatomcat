@@ -13,6 +13,10 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
 }
+  filter {
+    name   = "availability-zone"
+    values = ["ap-south-1a", "ap-south-1b"]
+  }
 }
 # Get the default AMI for Amazon Linux
 data "aws_ami" "amazon_linux" {
@@ -54,6 +58,7 @@ resource "aws_security_group" "default_sg" {
 resource "aws_instance" "default" {
   ami                   = data.aws_ami.amazon_linux.id
   instance_type         = var.instance_type
+  subnet_id              = element(data.aws_subnets.default.ids, 0)
   vpc_security_group_ids = [aws_security_group.default_sg.id]
   tags = {
     Name = "default-ec2-instance"
