@@ -24,7 +24,7 @@ pipeline {
                         
                         input message: 'Apply the terraform plan?', ok: 'Apply'
                         
-                        sh 'terraform apply -var-file="prod.tfvars" -auto-approve tfplan'
+                        sh 'terraform apply -auto-approve tfplan'
                     }
                 }
             }
