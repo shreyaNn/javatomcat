@@ -1,13 +1,8 @@
 pipeline {
-      agent {
+    agent {
         label 'jenkins-agent'
     }
     
-    environment {
-        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
-        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
-    }
-
     stages {
         stage('Checkout') {
             steps {
@@ -15,32 +10,22 @@ pipeline {
             }
         }
         
-        stage('Terraform Init') {
+        stage('Terraform Operations') {
             steps {
-                dir('Infra') {
-                    sh 'terraform init'
-                }
-            }
-        }
-        
-        stage('Terraform Plan') {
-            steps {
-                dir('Infra') {
-                    sh 'terraform plan -out=tfplan'
-                }
-            }
-        }
-        
-        stage('Approval') {
-            steps {
-                input message: 'Apply the terraform plan?'
-            }
-        }
-        
-        stage('Terraform Apply') {
-            steps {
-                dir('Infra') {
-                    sh 'terraform apply -auto-approve tfplan'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    dir('Infra') {
+                        sh 'terraform init'
+                        sh 'terraform plan -out=tfplan'
+                        
+                        input message: 'Apply the terraform plan?'
+                        
+                        sh 'terraform apply -auto-approve tfplan'
+                    }
                 }
             }
         }
@@ -48,12 +33,17 @@ pipeline {
     
     post {
         always {
-            // Ensure the Terraform backend is initialized
-            // Use a node block within the post section to ensure the proper context is provided
             node('jenkins-agent') {
-                dir('Infra') {
-                    sh 'terraform init -reconfigure' // Added reinitialize step
-                    sh 'terraform output'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    dir('Infra') {
+                        sh 'terraform init -reconfigure'
+                        sh 'terraform output'
+                    }
                 }
             }
         }
