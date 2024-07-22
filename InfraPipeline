@@ -27,7 +27,7 @@ pipeline {
                         sh 'terraform show tfplan'  // This will show the plan for review
                         input message: 'Proceed with apply?', ok: 'Yes'
                         
-                        sh 'terraform apply -var-file="prod.tfvars" -auto-approve tfplan'
+                        sh 'terraform apply -auto-approve tfplan'
                     }
                 }
             }
