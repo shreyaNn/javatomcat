@@ -48,9 +48,11 @@ pipeline {
     
     post {
         always {
+            // Ensure the Terraform backend is initialized
             // Use a node block within the post section to ensure the proper context is provided
             node('jenkins-agent') {
                 dir('Infra') {
+                    sh 'terraform init -reconfigure' // Added reinitialize step
                     sh 'terraform output'
                 }
             }
