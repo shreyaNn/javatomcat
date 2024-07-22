@@ -5,7 +5,7 @@ pipeline {
         NEXUS_CREDENTIALS_ID = 'nexus-credentials'
         JAR_NAME = 'app'
         BUILD_VERSION = "${env.BUILD_NUMBER}"
-        TEST_CONTAINER = 'test-container'
+        TEST_CONTAINER = 'selenium-node-chrome'
         PROD_SERVER = 'your-ec2-server'
         PROD_USER = 'ubuntu'
         PROD_PATH = "/opt/myjarfile/build${BUILD_VERSION}.jar"
@@ -18,8 +18,8 @@ pipeline {
                     try {
                         withCredentials([usernamePassword(credentialsId: NEXUS_CREDENTIALS_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                             sh """
-                                curl -u ${NEXUS_USER}:${NEXUS_PASS} -O "${NEXUS_URL}/${JAR_NAME}/2.0-SNAPSHOT/app-2.0-${BUILD_VERSION}.jar"
-                                mv app-2.0-${BUILD_VERSION}.jar build${BUILD_VERSION}.jar
+                                curl -u ${NEXUS_USER}:${NEXUS_PASS} -O "${NEXUS_URL}/${JAR_NAME}/2.0-SNAPSHOT/${JAR_NAME}-2.0-${BUILD_VERSION}.jar"
+                                mv ${JAR_NAME}-2.0-${BUILD_VERSION}.jar build${BUILD_VERSION}.jar
                             """
                         }
                     } catch (Exception e) {
@@ -34,8 +34,9 @@ pipeline {
             steps {
                 script {
                     try {
+                        // Start or run the test container
                         sh """
-                            docker start ${TEST_CONTAINER} || docker run -d --name ${TEST_CONTAINER} ubuntu
+                            docker start ${TEST_CONTAINER} || docker run -d --name ${TEST_CONTAINER} selenium/node-chrome
                             docker cp build${BUILD_VERSION}.jar ${TEST_CONTAINER}:${TEST_PATH}
                         """
                     } catch (Exception e) {
@@ -50,9 +51,10 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Add your Selenium test command here
-                        sh 'echo "Running Selenium tests..."'
-                        // Example: sh 'docker exec ${TEST_CONTAINER} java -jar /path/to/selenium-tests.jar'
+                        // Run Selenium tests
+                        sh 'echo "Running Selenium tests on Selenium Grid..."'
+                        // Example command to run Selenium tests; adjust as needed
+                        // sh 'docker exec ${TEST_CONTAINER} java -jar /path/to/selenium-tests.jar'
                     } catch (Exception e) {
                         echo "Testing failed. Error: ${e.getMessage()}"
                         error "Testing failed"
@@ -65,7 +67,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        //Copy the JAR file to the Ansible node if needed
+                        // Copy the JAR file to the Ansible node if needed
                         sh "cp build${BUILD_VERSION}.jar /path/to/ansible-java-app-setup/"
                         // Run Ansible playbook
                         dir("/path/to/ansible-java-app-setup") {
@@ -73,7 +75,7 @@ pipeline {
                                 ansible-playbook playbooks/deploy_app.yml \
                                 --extra-vars "jar_path=build${BUILD_VERSION}.jar prod_server=${PROD_SERVER} prod_path=${PROD_PATH} prod_user=${PROD_USER}"
                             """
-                }
+                        }
                     } catch (Exception e) {
                         echo "Failed to deploy JAR file to production using Ansible. Error: ${e.getMessage()}"
                         error "Failed to deploy JAR file to production using Ansible"
@@ -85,6 +87,7 @@ pipeline {
     post {
         always {
             script {
+                // Stop the test container if it was started
                 sh """
                     docker stop ${TEST_CONTAINER} || true
                 """
