@@ -54,7 +54,6 @@ resource "aws_security_group" "default_sg" {
 resource "aws_instance" "default" {
   ami                   = data.aws_ami.amazon_linux.id
   instance_type         = var.instance_type
-  subnet_id             = element(data.aws_subnets.default.ids, 0)  # Use the first default subnet
   vpc_security_group_ids = [aws_security_group.default_sg.id]
   tags = {
     Name = "default-ec2-instance"
