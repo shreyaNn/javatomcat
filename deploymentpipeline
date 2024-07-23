@@ -18,6 +18,7 @@ pipeline {
             steps {
                 sh """
                     wget http://localhost:8081/repository/maven-snapshots/com/mycompany/web/app/2.0-SNAPSHOT/app-2.0-20240721.143228-2.war -O build1.war
+                """       
             }
         }
         
