@@ -10,15 +10,26 @@ pipeline {
         ARTIFACT_NAME = "app"
         BUILD_VERSION = "2.0-SNAPSHOT"
         EC2_PROD_SERVER = "52.66.248.205"
-        TEST_CONTAINER_NAME = "tomcat"  // Using the existing Tomcat container
+        TEST_CONTAINER_NAME = "tomcat"  // Assuming this is the correct container name
+    }
+    
+    parameters {
+        string(name: 'WAR_VERSION', defaultValue: '2.0-20240721.143228-2', description: 'Version of the WAR file to deploy')
     }
     
     stages {
         stage('Pull from Nexus') {
             steps {
-                sh """
-                    wget http://localhost:8081/repository/maven-snapshots/com/mycompany/web/app/2.0-SNAPSHOT/app-2.0-20240721.143228-2.war -O build1.war
-                """       
+                script {
+                    try {
+                        sh """
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
+                        """
+                        echo "Successfully downloaded WAR file"
+                    } catch (Exception e) {
+                        error "Failed to download WAR file: ${e.getMessage()}"
+                    }
+                }
             }
         }
         
@@ -27,45 +38,75 @@ pipeline {
                 script {
                     def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
                     if (!containerRunning) {
-                    error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
-            }
-            
+                        error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
+                    }
+                    
                     sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/"
-            
+                    
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-        }
-    }
+                    echo "Deployed WAR to test environment"
+                }
+            }
         }
         
         stage('Run Selenium Tests') {
             steps {
-                sh '''
-                    # Wait for Tomcat to start up
-                    sleep 30
-                    # Run your Selenium tests
-                    mvn test -Dtest=SeleniumTest \
-                    -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
-                    -Dapp.url=http://${TEST_CONTAINER_NAME}:8080/build1 \
-                    -Dtest.browser=chrome
-                '''
+                script {
+                    try {
+                        sh '''
+                            # Wait for Tomcat to start up
+                            echo "Waiting for Tomcat to start..."
+                            sleep 30
+                            echo "Running Selenium tests..."
+                            mvn test -Dtest=SeleniumTest \
+                            -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
+                            -Dapp.url=http://${TEST_CONTAINER_NAME}:8080/build1 \
+                            -Dtest.browser=chrome
+                        '''
+                        echo "Selenium tests completed successfully"
+                    } catch (Exception e) {
+                        echo "Selenium tests failed: ${e.getMessage()}"
+                        error "Selenium test execution failed"
+                    }
+                }
             }
         }
         
         stage('Deploy to Production') {
+            when {
+                expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+            }
             steps {
+                input message: 'Deploy to production?', ok: 'Deploy'
                 ansiblePlaybook(
                     playbook: 'playbooks/deploy_app.yml',
                     inventory: 'inventory/inventory.ini',
                     extras: "-e \"prod_server=${EC2_PROD_SERVER} build_version=${BUILD_VERSION}\""
                 )
+                echo "Deployed to production successfully"
             }
         }
     }
     
     post {
         always {
-            sh 'docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || true'
+            junit '**/target/surefire-reports/*.xml'
+            archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
+            
+            script {
+                echo "Stopping Tomcat container..."
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running'"
+            }
+            
+            sh "rm -f build1.war"
+            echo "Cleaned up downloaded WAR file"
+        }
+        success {
+            echo "Pipeline completed successfully"
+        }
+        failure {
+            echo "Pipeline failed. Please check the logs and test results for more information."
         }
     }
 }
