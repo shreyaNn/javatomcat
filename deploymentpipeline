@@ -49,7 +49,7 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 ansiblePlaybook(
-                    playbook: 'playbooks/'deploy_app.yml',
+                    playbook: 'playbooks/deploy_app.yml',
                     inventory: 'inventory/inventory.ini',
                     extras: "-e \"prod_server=${EC2_PROD_SERVER} build_version=${BUILD_VERSION}\""
                 )
