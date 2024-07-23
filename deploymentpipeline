@@ -10,7 +10,7 @@ pipeline {
         ARTIFACT_NAME = "app"
         BUILD_VERSION = "2.0-SNAPSHOT"
         EC2_PROD_SERVER = "52.66.248.205"
-        TEST_CONTAINER_NAME = "devopsproject-tomcat-1"  // Using the existing Tomcat container
+        TEST_CONTAINER_NAME = "tomcat"  // Using the existing Tomcat container
     }
     
     stages {
@@ -23,22 +23,19 @@ pipeline {
         }
         
         stage('Deploy to Test Environment') {
-             steps {
+            steps {
                 script {
-                    // Check if container is running
-                    def containerRunning = sh(script: "docker ps -q -f name=tomcat", returnStatus: true) == 0
+                    def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
                     if (!containerRunning) {
-                        error "Tomcat container is not running. Please start it manually."
-                    }
-                    
-                    // Copy WAR file to container
-                    sh 'docker cp build1.war tomcat:/usr/local/tomcat/webapps/'
-                    
-                    // Restart Tomcat to deploy the new WAR
-                    sh 'docker exec tomcat catalina.sh stop'
-                    sh 'docker exec tomcat catalina.sh start'
-                }
+                    error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
             }
+            
+                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/"
+            
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+        }
+    }
         }
         
         stage('Run Selenium Tests') {
