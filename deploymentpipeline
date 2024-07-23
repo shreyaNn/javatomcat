@@ -39,14 +39,21 @@ pipeline {
                     def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
                     if (!containerRunning) {
                         error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
-                    }
-                    
-                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/"
-                    
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    echo "Deployed WAR to test environment"
-                }
+            }
+            
+                    // Stop Tomcat
+                        sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+            
+                    // Wait for Tomcat to fully stop
+                        sh "sleep 10"
+            
+                    // Copy the WAR file
+                        sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/"
+            
+                    // Start Tomcat
+                        sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                        echo "Deployed WAR to test environment"
+        }
             }
         }
         
