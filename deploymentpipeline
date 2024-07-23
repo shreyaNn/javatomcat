@@ -33,45 +33,46 @@ pipeline {
             }
         }
         
-        stage('Deploy to Test Environment') {
-            steps {
-                script {
-                    def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                    if (!containerRunning) {
-                        error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
-                    }
-                    
-                    // Stop Tomcat
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                    
-                    // Wait for Tomcat to fully stop
-                    sh "sleep 60"
-                    
-                    // Check if the file is still in use
-                    def fileInUse = sh(script: "docker exec ${TEST_CONTAINER_NAME} lsof /opt/mywarfile/build1.war", returnStatus: true) == 0
-                    if (fileInUse) {
-                        error "WAR file is still in use. Please check Tomcat or running processes."
-                    }
-                    
-                    // Remove the old WAR file
-                    sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war"
-                    
-                    // Copy the new WAR file
-                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
-                    
-                    // Set correct permissions
-                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
-                    
-                    // Start Tomcat
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    
-                    // Wait for Tomcat to start
-                    sh "sleep 60"
-                    
-                    echo "Deployed WAR to test environment"
+       stage('Deploy to Test Environment') {
+        steps {
+            script {
+                def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                if (!containerRunning) {
+                    error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
                 }
-            }
+                
+                // Stop Tomcat
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat'"
+    
+                // Wait for Tomcat to fully stop
+                sh "sleep 60"
+    
+                // Forcefully kill Tomcat if necessary
+                sh "docker exec ${TEST_CONTAINER_NAME} pkill -f 'catalina' || echo 'Tomcat is not running or already stopped'"
+    
+                // Wait for a bit more
+                sh "sleep 30"
+                
+                // Remove the old WAR file
+                sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war || echo 'Failed to remove old WAR file'"
+    
+                // Copy the new WAR file
+                sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
+                
+                // Set correct permissions
+                sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
+                
+                // Start Tomcat
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                
+                // Wait for Tomcat to start
+                sh "sleep 60"
+                
+                echo "Deployed WAR to test environment"
         }
+    }
+}
+
         
         stage('Run Selenium Tests') {
             steps {
