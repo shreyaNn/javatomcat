@@ -1,74 +1,67 @@
 pipeline {
-    agent { label 'jenkins-agent-with-ansible' }
+    agent any
+    
     environment {
-        NEXUS_URL = 'http://nexus:8081/repository/maven-releases/'
-        NEXUS_CREDENTIALS_ID = 'nexus-credentials'
-        ARTIFACT_NAME = 'your-artifact'
-        BUILD_VERSION = "${env.BUILD_NUMBER}"
-        TEST_CONTAINER = 'test-ubuntu'
-        PROD_SERVER = 'your-ec2-server'
-        PROD_USER = 'ubuntu'
-        ANSIBLE_PATH = "/home/jenkins/ansible-agent/ansible-java-app-setup"
+        NEXUS_URL = "http://nexus:8081"
+        NEXUS_REPOSITORY = "maven-snapshots"
+        ARTIFACT_GROUP = "com.mycompany.web"
+        ARTIFACT_NAME = "app"
+        BUILD_VERSION = "2.0-SNAPSHOT"
+        EC2_PROD_SERVER = "52.66.248.205"
     }
+    
     stages {
-        stage('Pull WAR from Nexus') {
+        stage('Checkout') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: NEXUS_CREDENTIALS_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                        sh """
-                            curl -u ${NEXUS_USER}:${NEXUS_PASS} -O "${NEXUS_URL}/com/yourcompany/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war"
-                        """
-                    }
-                }
+                checkout scm
             }
         }
-        stage('Deploy to Test') {
+        
+        stage('Build') {
             steps {
-                script {
-                    sh """
-                        docker start ${TEST_CONTAINER} || docker run -d --name ${TEST_CONTAINER} ubuntu
-                        docker cp ${ARTIFACT_NAME}-${BUILD_VERSION}.war ${TEST_CONTAINER}:/opt/myjarfile/build1.war
-                        docker exec ${TEST_CONTAINER} apt-get update
-                        docker exec ${TEST_CONTAINER} apt-get install -y openjdk-11-jdk
-                        docker exec ${TEST_CONTAINER} java -jar /opt/myjarfile/build1.war &
-                    """
-                }
+                sh 'mvn clean package'
             }
         }
-        stage('Run Tests') {
+        
+        stage('Pull from Nexus') {
             steps {
-                script {
-                    sh """
-                        # Add your Selenium test case here
-                        echo "Running Selenium test case..."
-                        # Example: docker run --network host selenium/standalone-chrome java -jar your-selenium-tests.jar
-                    """
-                }
+                sh """
+                    wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war -O /tmp/${ARTIFACT_NAME}-${BUILD_VERSION}.war
+                """
             }
         }
+        
+        stage('Deploy to Test Environment') {
+            steps {
+                sh """
+                    docker run -d --name test-container ubuntu:latest
+                    docker cp /tmp/${ARTIFACT_NAME}-${BUILD_VERSION}.war test-container:/opt/mywarfile/build1.war
+                """
+            }
+        }
+        
+        stage('Run Selenium Tests') {
+            steps {
+                // Add your Selenium test execution here
+                sh 'echo "Running Selenium tests..."'
+                // Example: sh 'mvn test -Dtest=SeleniumTest'
+            }
+        }
+        
         stage('Deploy to Production') {
             steps {
-                script {
-                    // Copy the WAR file to the Ansible directory
-                    sh "cp ${ARTIFACT_NAME}-${BUILD_VERSION}.war ${ANSIBLE_PATH}/roles/java_app/files/"
-                    
-                    // Run the Ansible playbook
-                    dir(ANSIBLE_PATH) {
-                        ansiblePlaybook(
-                            playbook: 'deploy_app.yml',
-                            inventory: 'inventory',
-                            extras: "-e \"build_version=${BUILD_VERSION} prod_server=${PROD_SERVER} prod_user=${PROD_USER}\""
-                        )
-                    }
-                }
+                ansiblePlaybook(
+                    playbook: 'playbooks/deploy_app.yml',
+                    inventory: 'inventory/inventory.ini',
+                    extras: "-e \"prod_server=${EC2_PROD_SERVER} build_version=${BUILD_VERSION}\""
+                )
             }
         }
     }
+    
     post {
         always {
-            script {
-                sh "docker stop ${TEST_CONTAINER} || true"
-            }
+            sh 'docker rm -f test-container || true'
         }
     }
 }
