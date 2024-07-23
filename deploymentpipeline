@@ -4,7 +4,7 @@ pipeline {
     }
     
     environment {
-        NEXUS_URL = "http://nexus:8081"
+        NEXUS_URL = "http://nexus:8081" // Ensure this is the correct Nexus URL
         NEXUS_REPOSITORY = "maven-snapshots"
         ARTIFACT_GROUP = "com.mycompany.web"
         ARTIFACT_NAME = "app"
@@ -23,11 +23,10 @@ pipeline {
                 script {
                     try {
                         sh """
-                        wget http://<nexus-ip>:8081/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
-                       """
-
+                        wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
+                        """
                         echo "Successfully downloaded WAR file"
-                }   catch (Exception e) {
+                    } catch (Exception e) {
                         error "Failed to download WAR file: ${e.getMessage()}"
                     }
                 }
@@ -42,7 +41,7 @@ pipeline {
                         error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
                     }
                     
-                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/"
+                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/"
                     
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
