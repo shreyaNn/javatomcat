@@ -107,7 +107,7 @@ pipeline {
                 echo "Deployed to production successfully"
             }
         }
-    }
+    
     
     post {
         always {
