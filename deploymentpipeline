@@ -40,33 +40,38 @@ pipeline {
                     if (!containerRunning) {
                         error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
                     }
-
-                    // Stop Tomcat gracefully
-                    sh """
-                    docker exec ${TEST_CONTAINER_NAME} sh -c 'catalina.sh stop'
-                    sleep 60
-                    """
                     
-                    // Handle file removal and replacement
+                    // Stop Tomcat
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                    
+                    // Wait for Tomcat to fully stop
+                    sh "sleep 30"
+
+                    // Retry logic to remove the old WAR file
                     retry(3) {
-                        try {
-                            // Remove the old WAR file
-                            sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'rm -f /opt/mywarfile/build1.war'"
-                            // Copy the new WAR file
-                            sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
-                            // Set correct permissions
-                            sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'chown tomcat:tomcat /opt/mywarfile/build1.war'"
-                        } catch (Exception e) {
-                            echo "Retrying file operations due to error: ${e.getMessage()}"
-                            sleep 30
+                        script {
+                            try {
+                                sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'fuser -k /opt/mywarfile/build1.war || echo \"File is not in use or removed successfully\"'"
+                                sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'rm -f /opt/mywarfile/build1.war || echo \"Failed to remove WAR file\"'"
+                            } catch (Exception e) {
+                                echo "Retrying file operations due to error: ${e.getMessage()}"
+                                sleep 30
+                                throw e
+                            }
                         }
                     }
                     
+                    // Copy the new WAR file
+                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
+                    
+                    // Set correct permissions
+                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
+                    
                     // Start Tomcat
-                    sh """
-                    docker exec ${TEST_CONTAINER_NAME} sh -c 'catalina.sh start'
-                    sleep 30
-                    """
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                    
+                    // Wait for Tomcat to start
+                    sh "sleep 30"
                     
                     echo "Deployed WAR to test environment"
                 }
@@ -119,7 +124,7 @@ pipeline {
             
             script {
                 echo "Stopping Tomcat container..."
-                sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running''"
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running'"
             }
             
             sh "rm -f build1.war"
