@@ -23,8 +23,9 @@ pipeline {
                 script {
                     try {
                         sh """
-                            wget http://<nexus-ip>:8081/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
-                        """
+                        wget http://<nexus-ip>:8081/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
+                       """
+
                         echo "Successfully downloaded WAR file"
                 }   catch (Exception e) {
                         error "Failed to download WAR file: ${e.getMessage()}"
