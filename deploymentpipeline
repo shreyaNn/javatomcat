@@ -41,21 +41,26 @@ pipeline {
                         error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
             }
             
-                    // Stop Tomcat
+            // Copy the WAR file to a temporary location in the container
+                        sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/tmp/build1.war"
+            
+            // Move the WAR file to the final destination
+                        sh """
+                        docker exec ${TEST_CONTAINER_NAME} sh -c '
+                        mv /tmp/build1.war /opt/mywarfile/build1.war && 
+                        chown tomcat:tomcat /opt/mywarfile/build1.war'
+                
+                    """
+            
+            // Restart Tomcat
                         sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-            
-                    // Wait for Tomcat to fully stop
                         sh "sleep 10"
-            
-                    // Copy the WAR file
-                        sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/"
-            
-                    // Start Tomcat
                         sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+            
                         echo "Deployed WAR to test environment"
         }
-            }
-        }
+    }    
+}
         
         stage('Run Selenium Tests') {
             steps {
