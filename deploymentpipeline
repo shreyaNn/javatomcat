@@ -33,36 +33,39 @@ pipeline {
             }
         }
         
-        stage('Deploy to Test Environment') {
-            steps {
-                script {
-                    def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                    if (!containerRunning) {
-                        error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
-                    }
-                    
-                    // Stop Tomcat
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                    
-                    // Wait for Tomcat to fully stop
-                    sh "sleep 30"
-                    
-                    // Remove the old WAR file
-                    sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war"
-                    
-                    // Copy the new WAR file
-                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
-                    
-                    // Set correct permissions
-                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
-                    
-                    // Start Tomcat
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    
-                    // Wait for Tomcat to start
-                    sh "sleep 30"
-                    
-                    echo "Deployed WAR to test environment"
+       stage('Deploy to Test Environment') {
+        steps {
+            script {
+                def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                if (!containerRunning) {
+                    error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
+                }
+                
+                // Stop Tomcat
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                
+                // Wait for Tomcat to fully stop
+                sh "sleep 30"
+                
+                // Rename the old WAR file instead of deleting it
+                sh "docker exec ${TEST_CONTAINER_NAME} mv /opt/mywarfile/build1.war /opt/mywarfile/build1.war.old || true"
+                
+                // Copy the new WAR file
+                sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
+                
+                // Set correct permissions
+                sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
+                
+                // Start Tomcat
+                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                
+                // Wait for Tomcat to start
+                sh "sleep 30"
+                
+                // Remove the old WAR file after Tomcat has started
+                sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war.old || true"
+                
+                echo "Deployed WAR to test environment"
         }
     }
 }
