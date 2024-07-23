@@ -45,7 +45,13 @@ pipeline {
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
                     
                     // Wait for Tomcat to fully stop
-                    sh "sleep 30"
+                    sh "sleep 60"
+                    
+                    // Check if the file is still in use
+                    def fileInUse = sh(script: "docker exec ${TEST_CONTAINER_NAME} lsof /opt/mywarfile/build1.war", returnStatus: true) == 0
+                    if (fileInUse) {
+                        error "WAR file is still in use. Please check Tomcat or running processes."
+                    }
                     
                     // Remove the old WAR file
                     sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war"
@@ -60,7 +66,7 @@ pipeline {
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
                     
                     // Wait for Tomcat to start
-                    sh "sleep 30"
+                    sh "sleep 60"
                     
                     echo "Deployed WAR to test environment"
                 }
