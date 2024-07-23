@@ -4,7 +4,7 @@ pipeline {
     }
     
     environment {
-        NEXUS_URL = "http://nexus:8081" // Ensure this is the correct Nexus URL
+        NEXUS_URL = "http://localhost:8081" // Ensure this is the correct Nexus URL
         NEXUS_REPOSITORY = "maven-snapshots"
         ARTIFACT_GROUP = "com.mycompany.web"
         ARTIFACT_NAME = "app"
