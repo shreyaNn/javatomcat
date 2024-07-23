@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label 'ansible-deploy'  // Using the correct node name
+    }
     
     environment {
         NEXUS_URL = "http://nexus:8081"
@@ -8,25 +10,14 @@ pipeline {
         ARTIFACT_NAME = "app"
         BUILD_VERSION = "2.0-SNAPSHOT"
         EC2_PROD_SERVER = "52.66.248.205"
+        TEST_CONTAINER_NAME = "devopsproject-tomcat-1"  // Using the existing Tomcat container
     }
     
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-        
-        stage('Build') {
-            steps {
-                sh 'mvn clean package'
-            }
-        }
-        
         stage('Pull from Nexus') {
             steps {
                 sh """
-                    wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war -O /tmp/${ARTIFACT_NAME}-${BUILD_VERSION}.war
+                    wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war -O build1.war
                 """
             }
         }
@@ -34,9 +25,9 @@ pipeline {
         stage('Deploy to Test Environment') {
             steps {
                 sh """
-                    docker run -d --name test-container -p 8888:8080 tomcat:9-jre8
-                    docker cp /tmp/${ARTIFACT_NAME}-${BUILD_VERSION}.war test-container:/opt/mywarfile/build1.war
-                    docker exec test-container /bin/bash -c 'cp /opt/mywarfile/build1.war /usr/local/tomcat/webapps/'
+                    docker cp build1.war ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/
+                    docker exec ${TEST_CONTAINER_NAME} catalina.sh stop
+                    docker exec ${TEST_CONTAINER_NAME} catalina.sh start
                 """
             }
         }
@@ -44,10 +35,12 @@ pipeline {
         stage('Run Selenium Tests') {
             steps {
                 sh '''
-                    sleep 30  # Wait for Tomcat to deploy the WAR
+                    # Wait for Tomcat to start up
+                    sleep 30
+                    # Run your Selenium tests
                     mvn test -Dtest=SeleniumTest \
                     -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
-                    -Dapp.url=http://test-container:8080/build1 \
+                    -Dapp.url=http://${TEST_CONTAINER_NAME}:8080/build1 \
                     -Dtest.browser=chrome
                 '''
             }
@@ -56,7 +49,7 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 ansiblePlaybook(
-                    playbook: 'playbooks/deploy_app.yml',
+                    playbook: 'playbooks/'deploy_app.yml',
                     inventory: 'inventory/inventory.ini',
                     extras: "-e \"prod_server=${EC2_PROD_SERVER} build_version=${BUILD_VERSION}\""
                 )
@@ -66,7 +59,7 @@ pipeline {
     
     post {
         always {
-            sh 'docker rm -f test-container || true'
+            sh 'docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || true'
         }
     }
 }
