@@ -50,6 +50,7 @@ pipeline {
                     -Dapp.url=http://test-container:8080/build1 \
                     -Dtest.browser=chrome
                 '''
+            }
         }
         
         stage('Deploy to Production') {
