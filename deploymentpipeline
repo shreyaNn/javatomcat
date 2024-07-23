@@ -33,42 +33,39 @@ pipeline {
             }
         }
         
-       stage('Deploy to Test Environment') {
-        steps {
-            script {
-                def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                if (!containerRunning) {
-                    error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
+        stage('Deploy to Test Environment') {
+            steps {
+                script {
+                    def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                    if (!containerRunning) {
+                        error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
+                    }
+                    
+                    // Stop Tomcat
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                    
+                    // Wait for Tomcat to fully stop
+                    sh "sleep 30"
+                    
+                    // Remove the old WAR file
+                    sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war"
+                    
+                    // Copy the new WAR file
+                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
+                    
+                    // Set correct permissions
+                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
+                    
+                    // Start Tomcat
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                    
+                    // Wait for Tomcat to start
+                    sh "sleep 30"
+                    
+                    echo "Deployed WAR to test environment"
                 }
-                
-                // Stop Tomcat
-                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                
-                // Wait for Tomcat to fully stop
-                sh "sleep 30"
-                
-                // Rename the old WAR file instead of deleting it
-                sh "docker exec ${TEST_CONTAINER_NAME} mv /opt/mywarfile/build1.war /opt/mywarfile/build1.war.old || true"
-                
-                // Copy the new WAR file
-                sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
-                
-                // Set correct permissions
-                sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
-                
-                // Start Tomcat
-                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                
-                // Wait for Tomcat to start
-                sh "sleep 30"
-                
-                // Remove the old WAR file after Tomcat has started
-                sh "docker exec ${TEST_CONTAINER_NAME} rm -f /opt/mywarfile/build1.war.old || true"
-                
-                echo "Deployed WAR to test environment"
+            }
         }
-    }
-}
         
         stage('Run Selenium Tests') {
             steps {
@@ -107,23 +104,14 @@ pipeline {
                 echo "Deployed to production successfully"
             }
         }
-    
+    }
     
     post {
         always {
+            junit '**/target/surefire-reports/*.xml'
+            archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
+            
             script {
-                try {
-                    junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
-                } catch (Exception e) {
-                    echo "Warning: Failed to process JUnit test results. Error: ${e.message}"
-                }
-                
-                try {
-                    archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
-                } catch (Exception e) {
-                    echo "Warning: Failed to archive artifacts. Error: ${e.message}"
-                }
-                
                 echo "Stopping Tomcat container..."
                 sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running'"
             }
@@ -138,3 +126,4 @@ pipeline {
             echo "Pipeline failed. Please check the logs and test results for more information."
         }
     }
+}
