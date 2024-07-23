@@ -111,10 +111,19 @@ pipeline {
     
     post {
         always {
-            junit '**/target/surefire-reports/*.xml'
-            archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
-            
             script {
+                try {
+                    junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+                } catch (Exception e) {
+                    echo "Warning: Failed to process JUnit test results. Error: ${e.message}"
+                }
+                
+                try {
+                    archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
+                } catch (Exception e) {
+                    echo "Warning: Failed to archive artifacts. Error: ${e.message}"
+                }
+                
                 echo "Stopping Tomcat container..."
                 sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running'"
             }
@@ -129,4 +138,3 @@ pipeline {
             echo "Pipeline failed. Please check the logs and test results for more information."
         }
     }
-}
