@@ -10,7 +10,7 @@ pipeline {
         ARTIFACT_NAME = "app"
         BUILD_VERSION = "2.0-SNAPSHOT"
         EC2_PROD_SERVER = "52.66.248.205"
-        TEST_CONTAINER_NAME = "tomcat"  // Assuming this is the correct container name
+        TEST_CONTAINER_NAME = "tomcat"  // Ensure this is the correct container name
     }
     
     parameters {
@@ -23,7 +23,7 @@ pipeline {
                 script {
                     try {
                         sh """
-                            wget http://localhost:8081/repository/maven-snapshots/com/mycompany/web/app/2.0-SNAPSHOT/app-2.0-20240721.143228-2.war -O build1.war
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
                         """
                         echo "Successfully downloaded WAR file"
                     } catch (Exception e) {
@@ -59,7 +59,7 @@ pipeline {
                             echo "Waiting for Tomcat to start..."
                             sleep 30
                             echo "Running Selenium tests..."
-                            mvn test -Dtest=SeleniumTest \
+                            mvn test -e -X -Dtest=SeleniumTest \
                             -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
                             -Dapp.url=http://${TEST_CONTAINER_NAME}:8080/build1 \
                             -Dtest.browser=chrome
