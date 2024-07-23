@@ -17,7 +17,7 @@ pipeline {
         stage('Pull from Nexus') {
             steps {
                 sh """
-                    wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war -O build1.war
+                    wget http://172.25.0.5:8081/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${BUILD_VERSION}.war -O build1.war
                 """
             }
         }
