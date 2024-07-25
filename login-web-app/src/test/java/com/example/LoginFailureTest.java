@@ -26,7 +26,7 @@ public class LoginFailureTest {
 
     @Test
     public void testLoginFailure() {
-        driver.get("http://localhost:8888/login-web-app"); // Adjust URL as needed
+        driver.get("http://localhost:8080/login-web-app"); // Adjust URL as needed
 
         // Enter invalid username and password
         driver.findElement(By.name("username")).sendKeys("invalidUser");
