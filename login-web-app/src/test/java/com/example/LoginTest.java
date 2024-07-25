@@ -25,7 +25,8 @@ public class LoginTest {
 
     @Test
     public void testLoginSuccess() {
-        driver.get("http://localhost:8888/login-web-app"); // Adjust URL as needed
+        //driver.get("http://localhost:8888/login-web-app"); // Adjust URL as needed
+        driver.get(http://localhost:8080/login-web-app);
         driver.findElement(By.name("username")).sendKeys("validUser");
         driver.findElement(By.name("password")).sendKeys("validPassword");
         driver.findElement(By.name("submit")).click();
