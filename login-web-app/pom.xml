@@ -36,6 +36,19 @@
             <artifactId>postgresql</artifactId>
             <version>42.6.0</version>
         </dependency>
+	 <!-- Selenium Java -->
+    	<dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.14.0</version> <!-- Use the latest compatible version -->
+    	</dependency>
+    <!-- TestNG -->
+    	<dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>7.7.0</version> <!-- Use the latest compatible version -->
+            <scope>test</scope>
+    	</dependency>
     </dependencies>
 
     <build>
