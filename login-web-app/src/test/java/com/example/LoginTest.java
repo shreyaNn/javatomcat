@@ -19,7 +19,7 @@ public class LoginTest {
         capabilities.setBrowserName("chrome");
         
         // Connect to the Selenium Grid hub
-        driver = new RemoteWebDriver(new URL("http://localhost:4444/wd/hub"), capabilities);
+        driver = new RemoteWebDriver(new URL("http://selenium-hub:4444/wd/hub"), capabilities);
     }
 
     @Test
