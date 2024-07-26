@@ -2,11 +2,10 @@ pipeline {
     agent {
         label 'jenkins-agent'
     }
-
-    tools {
-        maven 'Maven 3' // Use the name you provided in the Global Tool Configuration
+    environment {
+        MAVEN_HOME = tool 'Maven 3'
+        PATH = "${MAVEN_HOME}/bin:${env.PATH}"
     }
-
     stages {
         stage('Clone Repository') {
             steps {
@@ -15,12 +14,14 @@ pipeline {
         }
         stage('Build WAR') {
             steps {
-                sh 'mvn clean package'
+                dir('login-web-app') {
+                    sh 'mvn clean package'
+                }
             }
         }
         stage('Deploy to Tomcat') {
             steps {
-                sh 'cp target/login-web-app-1.0-SNAPSHOT.war /usr/local/tomcat/webapps/'
+                // Assuming deployment steps here
             }
         }
     }
