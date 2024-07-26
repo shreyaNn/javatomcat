@@ -49,7 +49,7 @@ pipeline {
                 script {
                     try {
                         // Copy the WAR file to the Tomcat container
-                        sh 'scp login-web-app/target/login-web-app-1.0-SNAPSHOT.war user@tomcat:8080/webapps/login-web-app-1.0-SNAPSHOT.war'
+                        sh 'scp login-web-app/target/login-web-app-1.0-SNAPSHOT.war /usr/local/tomcat/webapps/login-web-app-1.0-SNAPSHOT.war'
                         // Optionally, wait for Tomcat to deploy the WAR
                         sleep 30
                     } catch (Exception e) {
