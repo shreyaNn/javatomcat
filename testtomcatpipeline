@@ -1,0 +1,21 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+            }
+        }
+        stage('Build WAR') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('Deploy to Tomcat') {
+            steps {
+                sh 'cp target/login-web-app-1.0-SNAPSHOT.war /usr/local/tomcat/webapps/'
+            }
+        }
+    }
+}
