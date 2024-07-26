@@ -9,20 +9,41 @@ pipeline {
     stages {
         stage('Clone Repository') {
             steps {
-                git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                script {
+                    git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                }
             }
         }
         stage('Build WAR') {
             steps {
                 dir('login-web-app') {
-                    sh 'mvn clean package'
+                    script {
+                        try {
+                            sh 'mvn clean package'
+                        } catch (Exception e) {
+                            error "Maven build failed: ${e.message}"
+                        }
+                    }
                 }
             }
         }
         stage('Deploy to Tomcat') {
             steps {
-                // Assuming deployment steps here
+                script {
+                    // Add your deployment commands here
+                    echo 'Deploying WAR to Tomcat...'
+                    // Example:
+                    // sh 'scp target/myapp.war user@tomcat-server:/path/to/tomcat/webapps/'
+                }
             }
+        }
+    }
+    post {
+        success {
+            echo 'Pipeline succeeded!'
+        }
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }
