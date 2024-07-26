@@ -1,12 +1,17 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/POM/4.0.0/maven-4.0.0.xsd">
-
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.example</groupId>
     <artifactId>login-web-app</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>war</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
 
     <repositories>
         <repository>
@@ -14,7 +19,6 @@
             <url>http://nexus:8081/repository/maven-public/</url>
         </repository>
     </repositories>
-
     <pluginRepositories>
         <pluginRepository>
             <id>nexus-plugins</id>
@@ -36,19 +40,20 @@
             <artifactId>postgresql</artifactId>
             <version>42.6.0</version>
         </dependency>
-	 <!-- Selenium Java -->
-    	<dependency>
+        <!-- Selenium Java -->
+        <dependency>
             <groupId>org.seleniumhq.selenium</groupId>
             <artifactId>selenium-java</artifactId>
-            <version>4.14.0</version> <!-- Use the latest compatible version -->
-    	</dependency>
-    <!-- TestNG -->
-    	<dependency>
+            <version>4.14.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- TestNG -->
+        <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
-            <version>7.7.0</version> <!-- Use the latest compatible version -->
+            <version>7.7.0</version>
             <scope>test</scope>
-    	</dependency>
+        </dependency>
     </dependencies>
 
     <build>
@@ -58,20 +63,31 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-war-plugin</artifactId>
                 <version>3.3.1</version>
-	   </plugin>
-	   <plugin>
-	   	<groupId>org.apache.maven.plugins</groupId>
-            	<artifactId>maven-compiler-plugin</artifactId>
-            	<version>3.8.1</version> <!-- Use a version compatible with your Java version -->
-            	<configuration>
-                	<source>1.8</source> <!-- Update to your desired Java version -->
-                	<target>1.8</target> <!-- Update to your desired Java version -->
-            	</configuration>
-	  
-	   </plugin>
-
-
-
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <!-- Surefire Plugin for running tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.0.0-M5</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                    <systemPropertyVariables>
+                        <webdriver.chrome.driver>${webdriver.chrome.driver}</webdriver.chrome.driver>
+                    	<webdriver.remote.url>http://selenium-hub:4444/wd/hub</webdriver.remote.url>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
@@ -86,4 +102,3 @@
         </repository>
     </distributionManagement>
 </project>
-
