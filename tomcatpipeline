@@ -11,163 +11,70 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                script {
-                    try {
-                        git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
-                    } catch (Exception e) {
-                        echo "Failed to checkout. Error: ${e.getMessage()}"
-                        error "Repository checkout failed"
-                    }
-                }
-            }
-        }
-        
-        stage('Check Network') {
-            steps {
-                script {
-                    sh "ping -c 4 tomcat || true"
-                    sh "ping -c 4 selenium-hub || true"
-                    sh "ping -c 4 nexus || true"
-                    sh "ping -c 4 db1 || true"
-                }
+                git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
             }
         }
         
         stage('Build WAR') {
             steps {
                 dir('login-web-app') {
-                    script {
-                        try {
-                            sh """
-                            mvn clean package -B -X \
-                            -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
-                            -Dmaven.wagon.http.ssl.insecure=true \
-                            -Dmaven.wagon.http.ssl.allowall=true \
-                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
-                            -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/maven-public/
-                            """
-                        } catch (Exception e) {
-                            echo "Maven build failed. Error: ${e.getMessage()}"
-                            error "Maven build failed"
-                        }
-                    }
+                    sh """
+                    mvn clean package -B \
+                    -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                    -Dmaven.wagon.http.ssl.insecure=true \
+                    -Dmaven.wagon.http.ssl.allowall=true \
+                    -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
+                    -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/maven-public/
+                    """
                 }
             }
         }
         
         stage('Deploy to Tomcat') {
             steps {
-                script {
-                    try {
-                        sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app.war"
-                        sleep 30 // Wait for deployment to complete
-                    } catch (Exception e) {
-                        echo "Deployment to Tomcat failed. Error: ${e.getMessage()}"
-                        error "Deployment to Tomcat failed"
-                    }
-                }
+                sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app.war"
+                sleep 30 // Wait for deployment to complete
             }
         }
 
-        stage('Check Tomcat Logs') {
-            steps {
-                script {
-                    sh 'docker logs tomcat || true'
-                }
-            }
-        }
-        
         stage('Verify Tomcat Deployment') {
             steps {
-                script {
-                    sh "curl -v ${TOMCAT_URL} || true"
-                }
-            }
-        }
-        
-        stage('Check Selenium Hub') {
-            steps {
-                script {
-                    sh "curl -v ${SELENIUM_HUB}/status || true"
-                }
+                sh "curl -s ${TOMCAT_URL} > /dev/null"
             }
         }
         
         stage('Update Test Configuration') {
             steps {
-                script {
-                    sh """
-                    sed -i 's|http://localhost:8888/login-web-app|${TOMCAT_URL}|g' login-web-app/src/test/java/com/example/*.java
-                    sed -i 's|http://localhost:4444/wd/hub|${SELENIUM_HUB}|g' login-web-app/src/test/java/com/example/*.java
-                    cat login-web-app/src/test/java/com/example/*.java
-                    """
-                }
+                sh """
+                sed -i 's|http://localhost:8888/login-web-app|${TOMCAT_URL}|g' login-web-app/src/test/java/com/example/*.java
+                sed -i 's|http://localhost:4444/wd/hub|${SELENIUM_HUB}|g' login-web-app/src/test/java/com/example/*.java
+                """
             }
         }
 
-        stage('Print Test Files') {
-            steps {
-                sh 'cat login-web-app/src/test/java/com/example/*.java'
-            }
-        }
-
-        stage('Check Database Connection') {
-            steps {
-                script {
-                    sh """
-                    PGPASSWORD=changeme psql -h db1 -U user1 -d tododb -c "SELECT 1" || true
-                    """
-                }
-            }
-        }
-        
         stage('Run Selenium Tests') {
             steps {
                 dir('login-web-app') {
-                    script {
-                        try {
-                            sh """
-                            mvn test -B -X \
-                            -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
-                            -Dwebdriver.remote.url=${SELENIUM_HUB} \
-                            -Dapplication.url=${TOMCAT_URL} \
-                            -Dmaven.wagon.http.ssl.insecure=true \
-                            -Dmaven.wagon.http.ssl.allowall=true \
-                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
-                            | tee maven_output.log
-                            """
-                        } catch (Exception e) {
-                            echo "Selenium tests failed. Error: ${e.getMessage()}"
-                            sh 'cat target/surefire-reports/*.txt || true'
-                            sh 'cat maven_output.log || true'
-                            error "Selenium tests failed"
-                        }
-                    }
+                    sh """
+                    mvn test -B \
+                    -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                    -Dwebdriver.remote.url=${SELENIUM_HUB} \
+                    -Dapplication.url=${TOMCAT_URL} \
+                    -Dmaven.wagon.http.ssl.insecure=true \
+                    -Dmaven.wagon.http.ssl.allowall=true \
+                    -Dmaven.wagon.http.ssl.ignore.validity.dates=true
+                    """
                 }
             }
         }     
 
         stage('Verify Application Access') {
             steps {
-                script {
-                    sh "curl -v ${TOMCAT_URL} || true"
-                }
-            }
-        }
-
-        stage('Show Test Reports') {
-            steps {
-                sh 'cat /home/jenkins/agent/workspace/Tomcatdeploy1/login-web-app/target/surefire-reports/*.txt || true'
+                sh "curl -s ${TOMCAT_URL} > /dev/null"
             }
         }
     }
     post {
-        always {
-            script {
-                sh 'docker logs tomcat || true'
-                sh 'docker logs selenium-hub || true'
-            }
-        }
         failure {
             echo 'Pipeline failed!'
         }
