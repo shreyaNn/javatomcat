@@ -3,7 +3,7 @@ pipeline {
     environment {
         MAVEN_HOME = tool 'Maven 3'
         PATH = "${MAVEN_HOME}/bin:${env.PATH}"
-        TOMCAT_URL = 'http://localhost:8888/login-web-app'
+        TOMCAT_URL = 'http://tomcat:8888/login-web-app-1.0-SNAPSHOT'
         TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
         NEXUS_URL = 'http://nexus:8081'
         SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub'
@@ -28,6 +28,7 @@ pipeline {
                     sh "ping -c 4 tomcat || true"
                     sh "ping -c 4 selenium-hub || true"
                     sh "ping -c 4 nexus || true"
+                    sh "ping -c 4 db1 || true"
                 }
             }
         }
@@ -72,9 +73,9 @@ pipeline {
             steps {
                 script {
                     sh 'docker logs tomcat || true'
+                }
+            }
         }
-    }
-}
         
         stage('Verify Tomcat Deployment') {
             steps {
@@ -103,11 +104,22 @@ pipeline {
                 }
             }
         }
+
         stage('Print Test Files') {
             steps {
                 sh 'cat login-web-app/src/test/java/com/example/*.java'
-    }
-}
+            }
+        }
+
+        stage('Check Database Connection') {
+            steps {
+                script {
+                    sh """
+                    PGPASSWORD=changeme psql -h db1 -U user1 -d tododb -c "SELECT 1" || true
+                    """
+                }
+            }
+        }
         
         stage('Run Selenium Tests') {
             steps {
@@ -117,27 +129,31 @@ pipeline {
                             sh """
                             mvn test -B -X \
                             -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                            -Dwebdriver.remote.url=${SELENIUM_HUB} \
+                            -Dapplication.url=${TOMCAT_URL} \
                             -Dmaven.wagon.http.ssl.insecure=true \
                             -Dmaven.wagon.http.ssl.allowall=true \
-                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true
+                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
+                            | tee maven_output.log
                             """
-                    }   catch (Exception e) {
-                    echo "Selenium tests failed. Error: ${e.getMessage()}"
-                    sh 'cat target/surefire-reports/*.txt'
-                    sh 'ls -l target/surefire-reports/'
-                    error "Selenium tests failed"
+                        } catch (Exception e) {
+                            echo "Selenium tests failed. Error: ${e.getMessage()}"
+                            sh 'cat target/surefire-reports/*.txt || true'
+                            sh 'cat maven_output.log || true'
+                            error "Selenium tests failed"
+                        }
+                    }
                 }
             }
-        }
-    }
-}     
+        }     
+
         stage('Verify Application Access') {
             steps {
                 script {
                     sh "curl -v ${TOMCAT_URL} || true"
+                }
+            }
         }
-    }
-}
 
         stage('Show Test Reports') {
             steps {
