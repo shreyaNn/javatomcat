@@ -1,16 +1,20 @@
 pipeline {
-    agent {
-        label 'jenkins-agent'
-    }
+    agent { label 'jenkins-agent' }
     environment {
         MAVEN_HOME = tool 'Maven 3'
         PATH = "${MAVEN_HOME}/bin:${env.PATH}"
+        TOMCAT_URL = 'http://tomcat:8888/login-web-app-1.0-SNAPSHOT'
     }
     stages {
-        stage('Clone Repository') {
+        stage('Checkout') {
             steps {
                 script {
-                    git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    try {
+                        git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
                 }
             }
         }
@@ -19,7 +23,7 @@ pipeline {
                 dir('login-web-app') {
                     script {
                         try {
-                            sh 'mvn clean package'
+                            sh 'mvn clean package -B'
                         } catch (Exception e) {
                             error "Maven build failed: ${e.message}"
                         }
@@ -27,13 +31,44 @@ pipeline {
                 }
             }
         }
+        stage('Run Selenium Tests') {
+            steps {
+                script {
+                    try {
+                        // Update the Selenium test command to match your test cases
+                        sh 'mvn test -B -Dtest=LoginTest'
+                    } catch (Exception e) {
+                        echo "Selenium tests failed. Error: ${e.getMessage()}"
+                        error "Selenium tests failed"
+                    }
+                }
+            }
+        }
         stage('Deploy to Tomcat') {
             steps {
                 script {
-                    // Add your deployment commands here
-                    echo 'Deploying WAR to Tomcat...'
-                    // Example:
-                    // sh 'scp target/myapp.war user@tomcat-server:/path/to/tomcat/webapps/'
+                    try {
+                        // Copy the WAR file to the Tomcat container
+                        sh 'scp login-web-app/target/login-web-app-1.0-SNAPSHOT.war user@tomcat:8080/webapps/login-web-app-1.0-SNAPSHOT.war'
+                        // Optionally, wait for Tomcat to deploy the WAR
+                        sleep 30
+                    } catch (Exception e) {
+                        echo "Deployment to Tomcat failed. Error: ${e.getMessage()}"
+                        error "Deployment to Tomcat failed"
+                    }
+                }
+            }
+        }
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    try {
+                        // Check if the application is accessible
+                        sh "curl -f ${TOMCAT_URL}"
+                    } catch (Exception e) {
+                        echo "Verification failed. Error: ${e.getMessage()}"
+                        error "Verification failed"
+                    }
                 }
             }
         }
