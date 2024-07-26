@@ -3,7 +3,7 @@ pipeline {
     environment {
         MAVEN_HOME = tool 'Maven 3'
         PATH = "${MAVEN_HOME}/bin:${env.PATH}"
-        TOMCAT_URL = 'http://tomcat:8888/login-web-app'
+        TOMCAT_URL = 'http://tomcat:8888/login-web-app-1.0-SNAPSHOT'
         TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
         NEXUS_URL = 'http://nexus:8081'
         SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub'
