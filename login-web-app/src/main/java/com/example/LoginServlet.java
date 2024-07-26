@@ -28,7 +28,7 @@ public class LoginServlet extends HttpServlet {
 
     private boolean authenticate(String username, String password) {
         boolean isAuthenticated = false;
-        String jdbcUrl = "jdbc:db1://localhost:5432/tododb";
+        String jdbcUrl = "jdbc:postgres://localhost:5432/tododb";
         String dbUser = "user1";
         String dbPassword = "changeme";
 
