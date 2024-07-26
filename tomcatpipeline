@@ -5,6 +5,7 @@ pipeline {
         PATH = "${MAVEN_HOME}/bin:${env.PATH}"
         TOMCAT_URL = 'http://tomcat:8080/login-web-app-1.0-SNAPSHOT'
         TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
+        NEXUS_URL = 'http://nexus:8081'
     }
     stages {
         stage('Checkout') {
@@ -19,14 +20,26 @@ pipeline {
                 }
             }
         }
+        stage('Network Diagnostics') {
+            steps {
+                script {
+                    sh 'ip addr'
+                    sh 'cat /etc/hosts'
+                    sh 'nslookup nexus || true'
+                    sh 'ping -c 4 nexus || true'
+                    sh "curl -v ${NEXUS_URL} || true"
+                }
+            }
+        }
         stage('Build WAR') {
             steps {
                 dir('login-web-app') {
                     script {
                         try {
-                            sh 'mvn clean package -B'
+                            sh 'mvn clean package -B -X -Dmaven.repo.local=${WORKSPACE}/.m2/repository'
                         } catch (Exception e) {
-                            error "Maven build failed: ${e.message}"
+                            echo "Maven build failed. Error: ${e.getMessage()}"
+                            error "Maven build failed"
                         }
                     }
                 }
@@ -37,7 +50,7 @@ pipeline {
                 dir('login-web-app') {
                     script {
                         try {
-                            sh 'mvn test -B -Dtest=LoginTest'
+                            sh 'mvn test -B -Dtest=LoginTest -Dmaven.repo.local=${WORKSPACE}/.m2/repository'
                         } catch (Exception e) {
                             echo "Selenium tests failed. Error: ${e.getMessage()}"
                             error "Selenium tests failed"
@@ -73,11 +86,11 @@ pipeline {
         }
     }
     post {
-        success {
-            echo 'Pipeline succeeded!'
-        }
         failure {
             echo 'Pipeline failed!'
+        }
+        success {
+            echo 'Pipeline succeeded!'
         }
     }
 }
