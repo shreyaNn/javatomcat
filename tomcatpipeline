@@ -11,7 +11,14 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                script {
+                    try {
+                        git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
+                }
             }
         }
         
