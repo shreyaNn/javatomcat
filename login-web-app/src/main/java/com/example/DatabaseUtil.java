@@ -5,7 +5,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class DatabaseUtil {
-    private static final String JDBC_URL = "jdbc:postgresql://localhost:5432/tododb";
+    private static final String JDBC_URL = "jdbc:db1://localhost:5432/tododb";
     private static final String DB_USER = "user1";
     private static final String DB_PASSWORD = "changeme";
 
