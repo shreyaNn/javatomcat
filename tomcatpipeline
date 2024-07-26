@@ -67,6 +67,14 @@ pipeline {
                 }
             }
         }
+
+        stage('Check Tomcat Logs') {
+            steps {
+                script {
+                    sh 'docker logs tomcat || true'
+        }
+    }
+}
         
         stage('Verify Tomcat Deployment') {
             steps {
@@ -95,6 +103,11 @@ pipeline {
                 }
             }
         }
+        stage('Print Test Files') {
+            steps {
+                sh 'cat login-web-app/src/test/java/com/example/*.java'
+    }
+}
         
         stage('Run Selenium Tests') {
             steps {
@@ -108,16 +121,24 @@ pipeline {
                             -Dmaven.wagon.http.ssl.allowall=true \
                             -Dmaven.wagon.http.ssl.ignore.validity.dates=true
                             """
-                        } catch (Exception e) {
-                            echo "Selenium tests failed. Error: ${e.getMessage()}"
-                            sh 'cat target/surefire-reports/*.txt'
-                            error "Selenium tests failed"
-                        }
-                    }
+                    }   catch (Exception e) {
+                    echo "Selenium tests failed. Error: ${e.getMessage()}"
+                    sh 'cat target/surefire-reports/*.txt'
+                    sh 'ls -l target/surefire-reports/'
+                    error "Selenium tests failed"
                 }
             }
         }
-        
+    }
+}     
+        stage('Verify Application Access') {
+            steps {
+                script {
+                    sh "curl -v ${TOMCAT_URL} || true"
+        }
+    }
+}
+
         stage('Show Test Reports') {
             steps {
                 sh 'cat /home/jenkins/agent/workspace/Tomcatdeploy1/login-web-app/target/surefire-reports/*.txt || true'
