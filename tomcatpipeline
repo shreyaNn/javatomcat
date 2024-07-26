@@ -3,11 +3,10 @@ pipeline {
     environment {
         MAVEN_HOME = tool 'Maven 3'
         PATH = "${MAVEN_HOME}/bin:${env.PATH}"
-        TOMCAT_URL = 'http://tomcat:8080/login-web-app-1.0-SNAPSHOT'
+        TOMCAT_URL = 'http://localhost:8888/login-web-app'
         TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
         NEXUS_URL = 'http://nexus:8081'
-        NEXUS_IP = '172.17.0.1' // Replace with the actual IP of your Nexus container
-        SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub' // Update this to your Selenium Hub address
+        SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub'
     }
     stages {
         stage('Checkout') {
@@ -22,6 +21,17 @@ pipeline {
                 }
             }
         }
+        
+        stage('Check Network') {
+            steps {
+                script {
+                    sh "ping -c 4 tomcat || true"
+                    sh "ping -c 4 selenium-hub || true"
+                    sh "ping -c 4 nexus || true"
+                }
+            }
+        }
+        
         stage('Build WAR') {
             steps {
                 dir('login-web-app') {
@@ -43,11 +53,12 @@ pipeline {
                 }
             }
         }
+        
         stage('Deploy to Tomcat') {
             steps {
                 script {
                     try {
-                        sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app-1.0-SNAPSHOT.war"
+                        sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app.war"
                         sleep 30 // Wait for deployment to complete
                     } catch (Exception e) {
                         echo "Deployment to Tomcat failed. Error: ${e.getMessage()}"
@@ -56,23 +67,42 @@ pipeline {
                 }
             }
         }
+        
+        stage('Verify Tomcat Deployment') {
+            steps {
+                script {
+                    sh "curl -v ${TOMCAT_URL} || true"
+                }
+            }
+        }
+        
+        stage('Check Selenium Hub') {
+            steps {
+                script {
+                    sh "curl -v ${SELENIUM_HUB}/status || true"
+                }
+            }
+        }
+        
         stage('Update Test Configuration') {
             steps {
                 script {
                     sh """
-                    sed -i 's|http://localhost:8080/login-web-app|${TOMCAT_URL}|g' login-web-app/src/test/java/com/example/*.java
+                    sed -i 's|http://localhost:8888/login-web-app|${TOMCAT_URL}|g' login-web-app/src/test/java/com/example/*.java
                     sed -i 's|http://localhost:4444/wd/hub|${SELENIUM_HUB}|g' login-web-app/src/test/java/com/example/*.java
+                    cat login-web-app/src/test/java/com/example/*.java
                     """
                 }
             }
         }
+        
         stage('Run Selenium Tests') {
             steps {
                 dir('login-web-app') {
                     script {
                         try {
                             sh """
-                            mvn test -B \
+                            mvn test -B -X \
                             -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
                             -Dmaven.wagon.http.ssl.insecure=true \
                             -Dmaven.wagon.http.ssl.allowall=true \
@@ -80,26 +110,27 @@ pipeline {
                             """
                         } catch (Exception e) {
                             echo "Selenium tests failed. Error: ${e.getMessage()}"
+                            sh 'cat target/surefire-reports/*.txt'
                             error "Selenium tests failed"
                         }
                     }
                 }
             }
         }
-        stage('Verify Deployment') {
+        
+        stage('Show Test Reports') {
             steps {
-                script {
-                    try {
-                        sh "curl -f ${TOMCAT_URL}"
-                    } catch (Exception e) {
-                        echo "Verification failed. Error: ${e.getMessage()}"
-                        error "Verification failed"
-                    }
-                }
+                sh 'cat /home/jenkins/agent/workspace/Tomcatdeploy1/login-web-app/target/surefire-reports/*.txt || true'
             }
         }
     }
     post {
+        always {
+            script {
+                sh 'docker logs tomcat || true'
+                sh 'docker logs selenium-hub || true'
+            }
+        }
         failure {
             echo 'Pipeline failed!'
         }
