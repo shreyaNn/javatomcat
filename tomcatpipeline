@@ -6,6 +6,7 @@ pipeline {
         TOMCAT_URL = 'http://tomcat:8080/login-web-app-1.0-SNAPSHOT'
         TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
         NEXUS_URL = 'http://nexus:8081'
+        NEXUS_IP = '172.17.0.1' // Replace with the actual IP of your Nexus container
     }
     stages {
         stage('Checkout') {
@@ -28,6 +29,13 @@ pipeline {
                     sh 'nslookup nexus || true'
                     sh 'ping -c 4 nexus || true'
                     sh "curl -v ${NEXUS_URL} || true"
+                    
+                    // Add Nexus to /etc/hosts if it's not already there
+                    sh "grep -q nexus /etc/hosts || echo '${NEXUS_IP} nexus' | sudo tee -a /etc/hosts"
+                    
+                    // Display Docker network information
+                    sh 'docker network ls'
+                    sh 'docker network inspect bridge || true' // Replace 'bridge' with your actual network name if different
                 }
             }
         }
@@ -36,7 +44,14 @@ pipeline {
                 dir('login-web-app') {
                     script {
                         try {
-                            sh 'mvn clean package -B -X -Dmaven.repo.local=${WORKSPACE}/.m2/repository'
+                            sh """
+                            mvn clean package -B -X \
+                            -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                            -Dmaven.wagon.http.ssl.insecure=true \
+                            -Dmaven.wagon.http.ssl.allowall=true \
+                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
+                            -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/maven-public/
+                            """
                         } catch (Exception e) {
                             echo "Maven build failed. Error: ${e.getMessage()}"
                             error "Maven build failed"
@@ -50,7 +65,13 @@ pipeline {
                 dir('login-web-app') {
                     script {
                         try {
-                            sh 'mvn test -B -Dtest=LoginTest -Dmaven.repo.local=${WORKSPACE}/.m2/repository'
+                            sh """
+                            mvn test -B -Dtest=LoginTest \
+                            -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                            -Dmaven.wagon.http.ssl.insecure=true \
+                            -Dmaven.wagon.http.ssl.allowall=true \
+                            -Dmaven.wagon.http.ssl.ignore.validity.dates=true
+                            """
                         } catch (Exception e) {
                             echo "Selenium tests failed. Error: ${e.getMessage()}"
                             error "Selenium tests failed"
