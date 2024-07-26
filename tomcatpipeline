@@ -21,9 +21,6 @@ pipeline {
                     sh """
                     mvn clean package -B \
                     -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
-                    -Dmaven.wagon.http.ssl.insecure=true \
-                    -Dmaven.wagon.http.ssl.allowall=true \
-                    -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
                     -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/maven-public/
                     """
                 }
@@ -33,13 +30,15 @@ pipeline {
         stage('Deploy to Tomcat') {
             steps {
                 sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app.war"
-                sleep 30 // Wait for deployment to complete
-            }
-        }
-
-        stage('Verify Tomcat Deployment') {
-            steps {
-                sh "curl -s ${TOMCAT_URL} > /dev/null"
+                // Improved wait for deployment
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitUntil {
+                        script {
+                            def r = sh(script: "curl -s -o /dev/null -w '%{http_code}' ${TOMCAT_URL}", returnStdout: true).trim()
+                            return r == "200"
+                        }
+                    }
+                }
             }
         }
         
@@ -51,7 +50,7 @@ pipeline {
                 """
             }
         }
-
+        
         stage('Run Selenium Tests') {
             steps {
                 dir('login-web-app') {
@@ -59,24 +58,24 @@ pipeline {
                     mvn test -B \
                     -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
                     -Dwebdriver.remote.url=${SELENIUM_HUB} \
-                    -Dapplication.url=${TOMCAT_URL} \
-                    -Dmaven.wagon.http.ssl.insecure=true \
-                    -Dmaven.wagon.http.ssl.allowall=true \
-                    -Dmaven.wagon.http.ssl.ignore.validity.dates=true
+                    -Dapplication.url=${TOMCAT_URL}
                     """
                 }
             }
-        }     
-
-        stage('Verify Application Access') {
-            steps {
-                sh "curl -s ${TOMCAT_URL} > /dev/null"
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
             }
-        }
+        }     
     }
     post {
+        always {
+            archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+        }
         failure {
             echo 'Pipeline failed!'
+            // Add more detailed error reporting here
         }
         success {
             echo 'Pipeline succeeded!'
