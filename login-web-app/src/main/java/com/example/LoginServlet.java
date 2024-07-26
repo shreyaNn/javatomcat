@@ -28,9 +28,9 @@ public class LoginServlet extends HttpServlet {
 
     private boolean authenticate(String username, String password) {
         boolean isAuthenticated = false;
-        String jdbcUrl = "jdbc:postgresql://localhost:5432/yourdb";
-        String dbUser = "yourdbuser";
-        String dbPassword = "yourdbpassword";
+        String jdbcUrl = "jdbc:db1://localhost:5432/tododb";
+        String dbUser = "user1";
+        String dbPassword = "changeme";
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword)) {
             String sql = "SELECT * FROM users WHERE username = ? AND password = ?";
