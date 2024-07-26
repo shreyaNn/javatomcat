@@ -1,5 +1,11 @@
 pipeline {
-    agent any
+    agent {
+        label 'jenkins-agent'
+    }
+
+    tools {
+        maven 'Maven' // Use the name you provided in the Global Tool Configuration
+    }
 
     stages {
         stage('Clone Repository') {
