@@ -1,0 +1,131 @@
+pipeline {
+    agent { label 'jenkins-agent' }
+    environment {
+        scannerHome = tool 'sonar-scanner'
+        SONARQUBE_URL = 'http://localhost:9000'
+        NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials'
+        JENKINS_SONAR = credentials('sonartoken')
+        SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
+                        sh 'ls -ltr target/'
+                    } catch (Exception e) {
+                        echo "Build failed. Error: ${e.getMessage()}"
+                        error "Build failed"
+                    }
+                }
+            }
+        }
+        stage('Unit Tests') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn test -B --settings /root/.m2/settings.xml'
+                        junit '**/target/surefire-reports/TEST-*.xml'
+                    } catch (Exception e) {
+                        echo "Unit tests failed. Error: ${e.getMessage()}"
+                        error "Unit tests failed"
+                    }
+                }
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    try {
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=login-web-app \
+                                -Dsonar.host.url=${SONARQUBE_URL} \
+                                -Dsonar.token=${JENKINS_SONAR} \
+                                -Dsonar.java.binaries=target/classes
+                            """
+                        }
+                    } catch (Exception e) {
+                        echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
+                        error "SonarQube Analysis failed"
+                    }
+                }
+            }
+        }
+        stage('Push to Nexus') {
+            steps {
+                script {
+                    try {
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'localhost:8081',
+                            groupId: pom.groupId,
+                            version: version,
+                            repository: 'maven-snapshots',
+                            credentialsId: env.NEXUS_CREDENTIALS_ID,
+                            artifacts: [
+                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                            ]
+                        )
+                    } catch (Exception e) {
+                        echo "Push to Nexus failed. Error: ${e.getMessage()}"
+                        error "Push to Nexus failed"
+                    }
+                }
+            }
+        }
+        stage('Deploy to Test Environment') {
+            steps {
+                script {
+                    try {
+                        sh 'docker run -d --name login-web-app-test -p 8080:8080 -v $(pwd)/target/*.war:/usr/local/tomcat/webapps/ROOT.war tomcat:9.0'
+                    } catch (Exception e) {
+                        echo "Deployment to test environment failed. Error: ${e.getMessage()}"
+                        error "Deployment to test environment failed"
+                    }
+                }
+            }
+        }
+        stage('Run Selenium Tests') {
+            steps {
+                script {
+                    try {
+                        sh "mvn test -Dtest=*Test -DseleniumGridURL=${SELENIUM_HUB} -B --settings /root/.m2/settings.xml"
+                    } catch (Exception e) {
+                        echo "Selenium tests failed. Error: ${e.getMessage()}"
+                        error "Selenium tests failed"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                // Clean up test environment
+                sh 'docker stop login-web-app-test || true'
+                sh 'docker rm login-web-app-test || true'
+            }
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
