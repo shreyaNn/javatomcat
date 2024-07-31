@@ -1,40 +1,55 @@
 package com.example;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.remote.DesiredCapabilities;
-import org.openqa.selenium.remote.RemoteWebDriver;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+
 import org.openqa.selenium.By;
-import java.net.MalformedURLException;
-import java.net.URL;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.apache.commons.io.FileUtils;
 
-public class LoginTest {
-    private WebDriver driver;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
-    @BeforeClass
-    public void setUp() throws MalformedURLException {
-        DesiredCapabilities capabilities = new DesiredCapabilities();
-        capabilities.setBrowserName("chrome");
-        
-        // Connect to the Selenium Grid hub
-        driver = new RemoteWebDriver(new URL("http://selenium-hub:4444/wd/hub"), capabilities);
-    }
+import java.io.File;
+import java.time.Duration;
+import java.util.logging.Logger;
+
+public class LoginTest extends BaseTest {
+    private static final Logger logger = Logger.getLogger(LoginTest.class.getName());
 
     @Test
-    public void testLoginSuccess() {
-        //driver.get("http://localhost:8888/login-web-app"); // Adjust URL as needed
-        driver.get("http://tomcat:8888/login");
-        driver.findElement(By.name("username")).sendKeys("user1");
-        driver.findElement(By.name("password")).sendKeys("changeme");
-        driver.findElement(By.name("submit")).click();
-        String title = driver.getTitle();
-        Assert.assertEquals(title, "Expected Title After Login");
-    }
+    public void testSuccessfulLogin() {
+        logger.info("Starting successful login test");
 
-    @AfterClass
-    public void tearDown() {
-        driver.quit();
+        WebElement usernameField = driver.findElement(By.name("username"));
+        WebElement passwordField = driver.findElement(By.name("password"));
+        WebElement loginButton = driver.findElement(By.cssSelector("input[type='submit']"));
+
+        usernameField.sendKeys("test1");
+        passwordField.sendKeys("test1");
+        loginButton.click();
+
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement successMessage = wait.until(ExpectedConditions.presenceOfElementLocated(By.tagName("h2")));
+
+        try {
+            wait.until(ExpectedConditions.textToBe(By.tagName("h2"), "Login Successful!"));
+        } catch (Exception e) {
+            logger.warning("Expected text not found. Current text: " + successMessage.getText());
+        }
+
+        try {
+            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+            FileUtils.copyFile(screenshot, new File("login_successful.png"));
+            logger.info("Screenshot saved as login_successful.png");
+        } catch (Exception e) {
+            logger.warning("Failed to save screenshot: " + e.getMessage());
+        }
+
+        logger.info("Page source after login: " + driver.getPageSource());
+
+        Assert.assertEquals(successMessage.getText(), "Login Successful!", "Login success message is incorrect");
+        logger.info("Successful login test completed");
     }
 }
