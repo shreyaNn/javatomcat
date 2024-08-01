@@ -32,9 +32,10 @@ pipeline {
                         withSonarQubeEnv('SonarQube') {
                              def scannerHome = tool 'sonar-scanner'
                              sh """
-                             ${scannerHome}/bin/sonar-scanner -X \
+                             ${scannerHome}/bin/sonar-scanner \
                              -Dsonar.projectBaseDir=. \
-                             -Dsonar.working.directory=.scannerwork
+                             -Dsonar.working.directory=.scannerwork \
+                             -Dsonar.verbose=true
                              """
                        
                         }
