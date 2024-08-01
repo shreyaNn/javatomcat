@@ -19,6 +19,7 @@ pipeline {
                     dir('login-web-app') {
                         sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
                         sh 'mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B --settings /root/.m2/settings.xml -U'
+                        sh 'ls -R target'  // Debug: List contents of target directory
 
                     }
                 }
@@ -29,8 +30,12 @@ pipeline {
                 script {
                     dir('login-web-app') {
                         withSonarQubeEnv('SonarQube') {
-                            def scannerHome = tool 'sonar-scanner'
-                            sh "${scannerHome}/bin/sonar-scanner"
+                             def scannerHome = tool 'sonar-scanner'
+                             sh """
+                             ${scannerHome}/bin/sonar-scanner -X \
+                             -Dsonar.projectBaseDir=. \
+                             -Dsonar.working.directory=.scannerwork
+                             """
                        
                         }
                     }
