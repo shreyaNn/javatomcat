@@ -29,12 +29,8 @@ pipeline {
                 script {
                     dir('login-web-app') {
                         withSonarQubeEnv('SonarQube') {
-                            sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=login-web-app \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.token=${JENKINS_SONAR}
-                            """
+                            sh "${scannerHome}/bin/sonar-scanner"
+                       
                         }
                     }
                 }
