@@ -18,6 +18,7 @@ pipeline {
                 script {
                     dir('login-web-app') {
                         sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
+                        sh 'mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B --settings /root/.m2/settings.xml'
                     }
                 }
             }
@@ -33,6 +34,7 @@ pipeline {
                                 -Dsonar.host.url=${SONARQUBE_URL} \
                                 -Dsonar.token=${JENKINS_SONAR} \
                                 -Dsonar.java.binaries=target/classes
+                                -Dsonar.java.libraries=target/dependency/*
                             """
                         }
                     }
