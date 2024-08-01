@@ -16,7 +16,7 @@ pipeline {
         }
         stage('Build') {
             steps {
-                node{
+                node('jenkins-agent'){
                 script {
                     try {
                         sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
