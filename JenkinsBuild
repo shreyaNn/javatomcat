@@ -24,23 +24,20 @@ pipeline {
                            sh 'pwd'
                            //List contents of the workspace to verify the directory structure
                            sh 'ls -la /home/jenkins/agent/workspace'
+                            // Ensure Jenkinsbuild1 directory is present
+                           sh 'ls -la /home/jenkins/agent/workspace/Jenkinsbuild1'
                     
-                            // List contents of Jenkinsbuild1 to verify correct path
-                            sh 'ls -la /home/jenkins/agent/workspace/Jenkinsbuild1'
-                    
-                            // List contents of Jenkinsbuild1@2 to see if it exists
-                            sh 'ls -la /home/jenkins/agent/workspace/Jenkinsbuild1@2'
-
-                            // Navigate to the correct directory and run Maven
-                            dir('login-web-app') {
-                            // List contents of the directory to ensure pom.xml is present
-                                sh 'ls -la'
+                           // Navigate to the correct directory
+                           dir('/home/jenkins/agent/workspace/Jenkinsbuild1/login-web-app') {
+                          // List contents of the directory to confirm the presence of pom.xml
+                               sh 'ls -la'
                         
-                            // Run Maven build
-                                sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
+                         // Run Maven build
+                               sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
                         
-                            // List contents of the target directory
-                                sh 'ls -ltr target/'
+                        // List contents of the target directory
+                        sh 'ls -ltr target/'
+                          
                     }
                     }  catch (Exception e) {
                            echo "Build failed. Error: ${e.getMessage()}"
