@@ -35,7 +35,7 @@ pipeline {
                              ${scannerHome}/bin/sonar-scanner \
                              -Dsonar.projectBaseDir=. \
                              -Dsonar.working.directory=.scannerwork \
-                             -Dsonar.verbose=true
+                             -Dsonar.java.libraries=\$(pwd)/target/dependency
                              """
                        
                         }
