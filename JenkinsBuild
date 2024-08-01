@@ -30,13 +30,14 @@ pipeline {
                 script {
                     dir('login-web-app') {
                         withSonarQubeEnv('SonarQube') {
-                             def scannerHome = tool 'sonar-scanner'
-                             sh """
-                             ${scannerHome}/bin/sonar-scanner \
-                             -Dsonar.projectBaseDir=. \
-                             -Dsonar.working.directory=.scannerwork \
-                             -Dsonar.java.libraries=\$(pwd)/target/dependency
-                             """
+                            def scannerHome = tool 'sonar-scanner'
+                            sh """
+                            ${scannerHome}/bin/sonar-scanner -X \
+                            -Dsonar.projectBaseDir=. \
+                            -Dsonar.working.directory=.scannerwork \
+                            -Dsonar.java.binaries=\$(pwd)/target/classes \
+                            -Dsonar.java.libraries=\$(pwd)/target/dependency
+                            """
                        
                         }
                     }
