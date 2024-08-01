@@ -16,25 +16,29 @@ pipeline {
         }
         stage('Build') {
             steps {
-                node('jenkins-agent'){
-                script {
-                    try {
-                        sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
-                        sh 'ls -ltr target/'
-                    } catch (Exception e) {
-                        echo "Build failed. Error: ${e.getMessage()}"
-                        error "Build failed"
+                node('jenkins-agent') {
+                    script {
+                        try {
+                            dir('login-web-app') {
+                                sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
+                                sh 'ls -ltr target/'
+                            }
+                        } catch (Exception e) {
+                            echo "Build failed. Error: ${e.getMessage()}"
+                            error "Build failed"
+                        }
                     }
                 }
             }
         }
-}
         stage('Unit Tests') {
             steps {
                 script {
                     try {
-                        sh 'mvn test -B --settings /root/.m2/settings.xml'
-                        junit '**/target/surefire-reports/TEST-*.xml'
+                        dir('login-web-app') {
+                            sh 'mvn test -B --settings /root/.m2/settings.xml'
+                            junit '**/target/surefire-reports/TEST-*.xml'
+                        }
                     } catch (Exception e) {
                         echo "Unit tests failed. Error: ${e.getMessage()}"
                         error "Unit tests failed"
@@ -46,14 +50,16 @@ pipeline {
             steps {
                 script {
                     try {
-                        withSonarQubeEnv('SonarQube') {
-                            sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=login-web-app \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.token=${JENKINS_SONAR} \
-                                -Dsonar.java.binaries=target/classes
-                            """
+                        dir('login-web-app') {
+                            withSonarQubeEnv('SonarQube') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner \
+                                    -Dsonar.projectKey=login-web-app \
+                                    -Dsonar.host.url=${SONARQUBE_URL} \
+                                    -Dsonar.token=${JENKINS_SONAR} \
+                                    -Dsonar.java.binaries=target/classes
+                                """
+                            }
                         }
                     } catch (Exception e) {
                         echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
@@ -66,23 +72,25 @@ pipeline {
             steps {
                 script {
                     try {
-                        def pom = readMavenPom file: 'pom.xml'
-                        def artifactId = pom.artifactId
-                        def version = pom.version
-                        def packaging = pom.packaging
-                        def filePath = "target/${artifactId}-${version}.${packaging}"
-                        nexusArtifactUploader(
-                            nexusVersion: 'nexus3',
-                            protocol: 'http',
-                            nexusUrl: 'localhost:8081',
-                            groupId: pom.groupId,
-                            version: version,
-                            repository: 'maven-snapshots',
-                            credentialsId: env.NEXUS_CREDENTIALS_ID,
-                            artifacts: [
-                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
-                            ]
-                        )
+                        dir('login-web-app') {
+                            def pom = readMavenPom file: 'pom.xml'
+                            def artifactId = pom.artifactId
+                            def version = pom.version
+                            def packaging = pom.packaging
+                            def filePath = "target/${artifactId}-${version}.${packaging}"
+                            nexusArtifactUploader(
+                                nexusVersion: 'nexus3',
+                                protocol: 'http',
+                                nexusUrl: 'localhost:8081',
+                                groupId: pom.groupId,
+                                version: version,
+                                repository: 'maven-snapshots',
+                                credentialsId: env.NEXUS_CREDENTIALS_ID,
+                                artifacts: [
+                                    [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                                ]
+                            )
+                        }
                     } catch (Exception e) {
                         echo "Push to Nexus failed. Error: ${e.getMessage()}"
                         error "Push to Nexus failed"
@@ -94,15 +102,17 @@ pipeline {
             steps {
                 script {
                     try {
-                        //Read the POM file to get the artifactId and version
-                        def pom = readMavenPom file: 'pom.xml'
-                        def artifactId = pom.artifactId
-                        def version = pom.version
-                        def packaging = pom.packaging
-                        def filePath = "target/${artifactId}-${version}.${packaging}"
+                        dir('login-web-app') {
+                            // Read the POM file to get the artifactId and version
+                            def pom = readMavenPom file: 'pom.xml'
+                            def artifactId = pom.artifactId
+                            def version = pom.version
+                            def packaging = pom.packaging
+                            def filePath = "target/${artifactId}-${version}.${packaging}"
 
-                        // Copy the WAR file to the Tomcat container
-                        sh "docker cp ${filePath} tomcat:/usr/local/tomcat/webapps/ROOT.war"
+                            // Copy the WAR file to the Tomcat container
+                            sh "docker cp ${filePath} tomcat:/usr/local/tomcat/webapps/ROOT.war"
+                        }
                     } catch (Exception e) {
                         echo "Deployment to test environment failed. Error: ${e.getMessage()}"
                         error "Deployment to test environment failed"
@@ -114,7 +124,9 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh "mvn test -Dtest=*Test -DseleniumGridURL=${SELENIUM_HUB} -B --settings /root/.m2/settings.xml"
+                        dir('login-web-app') {
+                            sh "mvn test -Dtest=*Test -DseleniumGridURL=${SELENIUM_HUB} -B --settings /root/.m2/settings.xml"
+                        }
                     } catch (Exception e) {
                         echo "Selenium tests failed. Error: ${e.getMessage()}"
                         error "Selenium tests failed"
