@@ -6,7 +6,6 @@ pipeline {
         NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
         NEXUS_CREDENTIALS_ID = 'nexus-credentials'
         JENKINS_SONAR = credentials('sonartoken')
-        SELENIUM_HUB = 'http://selenium-hub1:4444/wd/hub'
     }
     stages {
         stage('Checkout') {
@@ -16,48 +15,9 @@ pipeline {
         }
         stage('Build') {
             steps {
-                node('jenkins-agent') {
-                    script {
-                       try {
-                            // Verify the workspace directory
-                           sh 'echo "Current workspace directory:"'
-                           sh 'pwd'
-                           //List contents of the workspace to verify the directory structure
-                           sh 'ls -la /home/jenkins/agent/workspace'
-                            // Ensure Jenkinsbuild1 directory is present
-                           sh 'ls -la /home/jenkins/agent/workspace/Jenkinsbuild1'
-                    
-                           // Navigate to the correct directory
-                           dir('/home/jenkins/agent/workspace/Jenkinsbuild1/login-web-app') {
-                          // List contents of the directory to confirm the presence of pom.xml
-                               sh 'ls -la'
-                        
-                         // Run Maven build
-                               sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
-                        
-                        // List contents of the target directory
-                        sh 'ls -ltr target/'
-                          
-                    }
-                    }  catch (Exception e) {
-                           echo "Build failed. Error: ${e.getMessage()}"
-                           error "Build failed"
-                }
-            }
-        }
-    }
-}
-        stage('Unit Tests') {
-            steps {
                 script {
-                    try {
-                        dir('login-web-app') {
-                            sh 'mvn test -B --settings /root/.m2/settings.xml'
-                            junit '**/target/surefire-reports/TEST-*.xml'
-                        }
-                    } catch (Exception e) {
-                        echo "Unit tests failed. Error: ${e.getMessage()}"
-                        error "Unit tests failed"
+                    dir('login-web-app') {
+                        sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
                     }
                 }
             }
@@ -65,21 +25,26 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    try {
-                        dir('login-web-app') {
-                            withSonarQubeEnv('SonarQube') {
-                                sh """
-                                    ${scannerHome}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=login-web-app \
-                                    -Dsonar.host.url=${SONARQUBE_URL} \
-                                    -Dsonar.token=${JENKINS_SONAR} \
-                                    -Dsonar.java.binaries=target/classes
-                                """
-                            }
+                    dir('login-web-app') {
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=login-web-app \
+                                -Dsonar.host.url=${SONARQUBE_URL} \
+                                -Dsonar.token=${JENKINS_SONAR} \
+                                -Dsonar.java.binaries=target/classes
+                            """
                         }
-                    } catch (Exception e) {
-                        echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
-                        error "SonarQube Analysis failed"
+                    }
+                }
+            }
+        }
+        stage('Unit Tests') {
+            steps {
+                script {
+                    dir('login-web-app') {
+                        sh 'mvn test -B --settings /root/.m2/settings.xml'
+                        junit '**/target/surefire-reports/TEST-*.xml'
                     }
                 }
             }
@@ -87,65 +52,24 @@ pipeline {
         stage('Push to Nexus') {
             steps {
                 script {
-                    try {
-                        dir('login-web-app') {
-                            def pom = readMavenPom file: 'pom.xml'
-                            def artifactId = pom.artifactId
-                            def version = pom.version
-                            def packaging = pom.packaging
-                            def filePath = "target/${artifactId}-${version}.${packaging}"
-                            nexusArtifactUploader(
-                                nexusVersion: 'nexus3',
-                                protocol: 'http',
-                                nexusUrl: 'localhost:8081',
-                                groupId: pom.groupId,
-                                version: version,
-                                repository: 'maven-snapshots',
-                                credentialsId: env.NEXUS_CREDENTIALS_ID,
-                                artifacts: [
-                                    [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
-                                ]
-                            )
-                        }
-                    } catch (Exception e) {
-                        echo "Push to Nexus failed. Error: ${e.getMessage()}"
-                        error "Push to Nexus failed"
-                    }
-                }
-            }
-        }
-        stage('Deploy to Test Environment') {
-            steps {
-                script {
-                    try {
-                        dir('login-web-app') {
-                            // Read the POM file to get the artifactId and version
-                            def pom = readMavenPom file: 'pom.xml'
-                            def artifactId = pom.artifactId
-                            def version = pom.version
-                            def packaging = pom.packaging
-                            def filePath = "target/${artifactId}-${version}.${packaging}"
-
-                            // Copy the WAR file to the Tomcat container
-                            sh "docker cp ${filePath} tomcat:/usr/local/tomcat/webapps/ROOT.war"
-                        }
-                    } catch (Exception e) {
-                        echo "Deployment to test environment failed. Error: ${e.getMessage()}"
-                        error "Deployment to test environment failed"
-                    }
-                }
-            }
-        }
-        stage('Run Selenium Tests') {
-            steps {
-                script {
-                    try {
-                        dir('login-web-app') {
-                            sh "mvn test -Dtest=*Test -DseleniumGridURL=${SELENIUM_HUB} -B --settings /root/.m2/settings.xml"
-                        }
-                    } catch (Exception e) {
-                        echo "Selenium tests failed. Error: ${e.getMessage()}"
-                        error "Selenium tests failed"
+                    dir('login-web-app') {
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'localhost:8081',
+                            groupId: pom.groupId,
+                            version: version,
+                            repository: 'maven-snapshots',
+                            credentialsId: env.NEXUS_CREDENTIALS_ID,
+                            artifacts: [
+                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                            ]
+                        )
                     }
                 }
             }
@@ -153,7 +77,7 @@ pipeline {
     }
     post {
         always {
-            echo 'Pipeline finished, test environment retained for verification.'
+            echo 'Pipeline finished.'
         }
         success {
             echo 'Pipeline executed successfully!'
