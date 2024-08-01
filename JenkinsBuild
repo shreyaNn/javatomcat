@@ -33,9 +33,7 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=login-web-app \
                                 -Dsonar.host.url=${SONARQUBE_URL} \
-                                -Dsonar.token=${JENKINS_SONAR} \
-                                -Dsonar.java.binaries=target/classes
-                                -Dsonar.java.libraries=target/dependency/*
+                                -Dsonar.token=${JENKINS_SONAR}
                             """
                         }
                     }
