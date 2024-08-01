@@ -18,7 +18,8 @@ pipeline {
                 script {
                     dir('login-web-app') {
                         sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
-                        sh 'mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B --settings /root/.m2/settings.xml'
+                        sh 'mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B --settings /root/.m2/settings.xml -U'
+
                     }
                 }
             }
