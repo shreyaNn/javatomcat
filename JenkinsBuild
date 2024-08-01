@@ -94,7 +94,15 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'docker run -d --name login-web-app-test -p 8080:8080 -v $(pwd)/target/*.war:/usr/local/tomcat/webapps/ROOT.war tomcat:9.0'
+                        //Read the POM file to get the artifactId and version
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+
+                        // Copy the WAR file to the Tomcat container
+                        sh "docker cp ${filePath} tomcat:/usr/local/tomcat/webapps/ROOT.war"
                     } catch (Exception e) {
                         echo "Deployment to test environment failed. Error: ${e.getMessage()}"
                         error "Deployment to test environment failed"
@@ -117,11 +125,7 @@ pipeline {
     }
     post {
         always {
-            script {
-                // Clean up test environment
-                sh 'docker stop login-web-app-test || true'
-                sh 'docker rm login-web-app-test || true'
-            }
+            echo 'Pipeline finished, test environment retained for verification.'
         }
         success {
             echo 'Pipeline executed successfully!'
