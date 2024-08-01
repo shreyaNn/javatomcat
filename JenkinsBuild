@@ -30,9 +30,9 @@ pipeline {
                     dir('login-web-app') {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=login-web-app \
-                                -Dsonar.java.libraries=${WORKSPACE}/login-web-app/target/dependency/*.jar
+                                ${scannerHome}/bin/sonar-scanner -X \
+                                -Dsonar.projectBaseDir=${WORKSPACE}/login-web-app \
+                                -Dsonar.working.directory=${WORKSPACE}/login-web-app/.scannerwork
                             """
                        
                         }
