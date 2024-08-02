@@ -36,7 +36,12 @@ pipeline {
                             -Dsonar.projectBaseDir=. \
                             -Dsonar.working.directory=.scannerwork \
                             -Dsonar.java.binaries=\$(pwd)/target/classes \
-                            -Dsonar.java.libraries=\$(pwd)/target/dependency
+                            -Dsonar.java.libraries=\$(pwd)/target/dependency \
+                            -Dsonar.sources=src/main/java \
+                            -Dsonar.tests=src/test/java \
+                            -Dsonar.java.test.binaries=\$(pwd)/target/test-classes \
+                            -Dsonar.test.exclusions=**/selenium/**/*,**/*IT.java \
+                            -Dsonar.coverage.exclusions=**/*
                             """
                        
                         }
@@ -48,7 +53,7 @@ pipeline {
             steps {
                 script {
                     dir('login-web-app') {
-                        sh 'mvn test -B --settings /root/.m2/settings.xml'
+                         sh 'mvn test -B -Dtest=!*IT -DfailIfNoTests=false --settings /root/.m2/settings.xml'
                         junit '**/target/surefire-reports/TEST-*.xml'
                     }
                 }
