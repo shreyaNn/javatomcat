@@ -87,6 +87,18 @@
             <version>7.7.1</version>
             <scope>test</scope>
     	</dependency>
+    	<dependency>
+    	    <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>3.12.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -95,7 +107,16 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-war-plugin</artifactId>
-                <version>3.3.1</version>
+		<version>3.3.1</version>
+		<configuration>
+                    <packagingExcludes>
+                        WEB-INF/classes/com/example/test/**,
+                        WEB-INF/classes/com/example/unit-test/**,
+                        **/selenium/**,
+                        **/test/**,
+                        **/testng.xml
+                    </packagingExcludes>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -103,38 +124,106 @@
                 <version>3.8.1</version>
                 <configuration>
                     <source>17</source>
-                    <target>17</target>
-                </configuration>
-            </plugin>
-	    <!-- Surefire Plugin for running tests -->
-            <plugin>
+		    <target>17</target>
+		    <!--skip>true</skip-->
+    		</configuration>
+	    </plugin>
+		<!--executions>
+        	    <execution>
+                        <id>default-testCompile</id>
+                        <phase>none</phase>
+                    </execution>
+		</executions-->
+	        <!-- Surefire Plugin for running tests -->
+		<plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.0.0-M5</version>
                 <configuration>
-                    <suiteXmlFiles>
-                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
-                    </suiteXmlFiles>
-                    <systemPropertyVariables>
-			    <!--<webdriver.chrome.driver>${webdriver.chrome.driver}</webdriver.chrome.driver-->
-			<webdriver.remote.url>http://selenium-hub1:4444/wd/hub</webdriver.remote.url>
-		    </systemPropertyVariables>
-		    <properties>
-                        <property>
-                            <name>usedefaultlisteners</name>
-                	    <value>false</value>
-            		</property>
-            		<property>
-                	    <name>listener</name>
-                            <value>org.testng.reporters.XMLReporter</value>
-                        </property>
-                    </properties>
-
-
+                    <skipTests>true</skipTests>
+                    <!--skip>true</skip-->
                 </configuration>
-	    </plugin> 
-        </plugins>
+	    </plugin>
+	      <!-- Build Helper Plugin -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>add-test-source</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+		                <source>src/unit-test/java</source>
+				<source>src/test/java</source>  <!-- Add this if you have tests here -->
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+	
+        </plugins> 
     </build>
+
+     <profiles>
+        <profile>
+            <id>unit-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.0.0-M5</version>
+                        <configuration>
+		            <skipTests>false</skipTests>
+			    <includes>
+                        	<include>**/*Test.java</include>
+			    </includes>
+			     <excludes>
+                        	<exclude>**/test/**/*Test.java</exclude>
+                        	<exclude>**/LoginTest.java</exclude>
+                        	<exclude>**/LoginFailureTest.java</exclude>
+                        	<exclude>**/BaseTest.java</exclude>
+                    	     </excludes>
+			     <testSourceDirectory>${basedir}/src/unit-test/java</testSourceDirectory>
+			     <trimStackTrace>false</trimStackTrace>
+        		     <systemPropertyVariables>
+            		     	<java.util.logging.config.file>src/unit-test/resources/logging.properties</java.util.logging.config.file>
+        		     </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>selenium-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.0.0-M5</version>
+                        <configuration>
+				<skipTests>false</skipTests>
+				<includes>
+                        	    <include>**/test/**/*Test.java</include>
+                    		</includes>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                            <systemPropertyVariables>
+                                <webdriver.remote.url>http://selenium-hub1:4444/wd/hub</webdriver.remote.url>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <distributionManagement>
         <snapshotRepository>
