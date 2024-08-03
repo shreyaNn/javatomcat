@@ -53,8 +53,10 @@ pipeline {
             steps {
                 script {
                     dir('login-web-app') {
-                         sh 'mvn test -B -Dtest=!*IT -DfailIfNoTests=false --settings /root/.m2/settings.xml'
-                        junit '**/target/surefire-reports/TEST-*.xml'
+                        sh 'mvn test -P unit-tests'
+                        sh 'mvn surefire-report:report-only -P unit-tests'
+                        sh 'ls -R target'
+                        junit '**/target/surefire-reports/*.xml'
                     }
                 }
             }
