@@ -63,10 +63,11 @@ pipeline {
                         def warFileName = "${ARTIFACT_NAME}-${params.BUILD_VERSION.replace('-SNAPSHOT', '')}-${latestSnapshot}.war"
                         
                         sh """
-                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${warFileName} -O login.war
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${warFileName} -O ${warFileName}
                         """
                         
                         echo "Successfully downloaded WAR file: ${warFileName}"
+                        env.DOWNLOADED_WAR_FILE = warFileName
                     } catch (Exception e) {
                         error "Failed to download WAR file: ${e.getMessage()}"
                     }
@@ -85,10 +86,13 @@ pipeline {
                         if (containerRunning) {
                             echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
                             
-                            sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
-                            sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
+                            sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
                             
-                            echo "Deployed new WAR to test environment"
+                            def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
+                            
+                            sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
+                            
+                            echo "Deployed new WAR to test environment as login.war"
                         } else {
                             error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
                         }
@@ -146,7 +150,7 @@ pipeline {
                     try {
                         sshagent(['aws-login-mumbai-key']) {
                             sh """
-                                scp login.war ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
+                                scp ${env.DOWNLOADED_WAR_FILE} ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
                                 ssh ec2-user@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
                             """
                         }
