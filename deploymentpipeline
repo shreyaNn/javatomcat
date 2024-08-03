@@ -1,30 +1,53 @@
 pipeline {
     agent {
-        label 'ansible-deploy'  // Using the correct node name
+        label 'ansible-deploy'
     }
     
     environment {
-        NEXUS_URL = "http://localhost:8081" // Ensure this is the correct Nexus URL
+        NEXUS_URL = "http://localhost:8081"
         NEXUS_REPOSITORY = "maven-snapshots"
-        ARTIFACT_GROUP = "com.mycompany.web"
-        ARTIFACT_NAME = "app"
-        BUILD_VERSION = "2.0-SNAPSHOT"
-        EC2_PROD_SERVER = "52.66.248.205"
-        TEST_CONTAINER_NAME = "tomcat"  // Ensure this is the correct container name
+        ARTIFACT_GROUP = "com.example"
+        ARTIFACT_NAME = "login-web-app"
+        EC2_PROD_SERVER = "ec2-65-1-147-19.ap-south-1.compute.amazonaws.com"
+        TEST_CONTAINER_NAME = "tomcat"
+        WAR_PATH = "/usr/local/tomcat/webapps/login.war"
+        APP_CONTEXT_PATH = "login"
+        TOMCAT_PORT = "8888"
     }
     
     parameters {
-        string(name: 'WAR_VERSION', defaultValue: '2.0-20240721.143228-2', description: 'Version of the WAR file to deploy')
+        string(name: 'BUILD_VERSION', defaultValue: '1.0-SNAPSHOT', description: 'Version to build')
+        choice(name: 'DEPLOY_ENV', choices: ['test', 'production'], description: 'Environment to deploy to')
     }
     
     stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    if (params.BUILD_VERSION == '1.0-SNAPSHOT') {
+                        env.BUILD_VERSION = sh(script: 'git describe --tags --always', returnStdout: true).trim()
+                    } else {
+                        env.BUILD_VERSION = params.BUILD_VERSION
+                    }
+                    echo "Building version: ${env.BUILD_VERSION}"
+                }
+            }
+        }
+
         stage('Pull from Nexus') {
             steps {
                 script {
                     try {
+                        def latestVersion = sh(script: """
+                            curl -s "${NEXUS_URL}/service/rest/v1/search/assets?repository=${NEXUS_REPOSITORY}&group=${ARTIFACT_GROUP}&name=${ARTIFACT_NAME}&version=${env.BUILD_VERSION}" | jq -r '.items[0].version'
+                        """, returnStdout: true).trim()
+                        
+                        echo "Latest version found: ${latestVersion}"
+                        
                         sh """
-                        wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${BUILD_VERSION}/${ARTIFACT_NAME}-${params.WAR_VERSION}.war -O build1.war
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${env.BUILD_VERSION}/${ARTIFACT_NAME}-${latestVersion}.war -O login.war
                         """
+                        
                         echo "Successfully downloaded WAR file"
                     } catch (Exception e) {
                         error "Failed to download WAR file: ${e.getMessage()}"
@@ -34,44 +57,26 @@ pipeline {
         }
         
         stage('Deploy to Test Environment') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
             steps {
                 script {
                     def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
                     if (!containerRunning) {
-                        error "${TEST_CONTAINER_NAME} container is not running. Please start it manually."
+                        sh "docker run -d --name ${TEST_CONTAINER_NAME} -p ${TOMCAT_PORT}:8080 tomcat:10-jdk17"
+                        echo "Started new ${TEST_CONTAINER_NAME} container"
                     }
                     
-                    // Stop Tomcat
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
                     
-                    // Wait for Tomcat to fully stop
-                    sh "sleep 30"
-
-                    // Retry logic to remove the old WAR file
-                    retry(3) {
-                        script {
-                            try {
-                                sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'fuser -k /opt/mywarfile/build1.war || echo \"File is not in use or removed successfully\"'"
-                                sh "docker exec ${TEST_CONTAINER_NAME} sh -c 'rm -f /opt/mywarfile/build1.war || echo \"Failed to remove WAR file\"'"
-                            } catch (Exception e) {
-                                echo "Retrying file operations due to error: ${e.getMessage()}"
-                                sleep 30
-                                throw e
-                            }
-                        }
-                    }
+                    sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
+                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
                     
-                    // Copy the new WAR file
-                    sh "docker cp build1.war ${TEST_CONTAINER_NAME}:/opt/mywarfile/build1.war"
-                    
-                    // Set correct permissions
-                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat /opt/mywarfile/build1.war"
-                    
-                    // Start Tomcat
                     sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    
-                    // Wait for Tomcat to start
-                    sh "sleep 30"
+                    sh """
+                        timeout 300 bash -c 'until curl -s http://localhost:${TOMCAT_PORT} > /dev/null; do sleep 5; done'
+                    """
                     
                     echo "Deployed WAR to test environment"
                 }
@@ -79,17 +84,17 @@ pipeline {
         }
         
         stage('Run Selenium Tests') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
             steps {
                 script {
                     try {
                         sh '''
-                            # Wait for Tomcat to start up
-                            echo "Waiting for Tomcat to start..."
-                            sleep 30
                             echo "Running Selenium tests..."
                             mvn test -e -X -Dtest=SeleniumTest \
                             -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
-                            -Dapp.url=http://${TEST_CONTAINER_NAME}:8080/build1 \
+                            -Dapp.url=http://localhost:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
                             -Dtest.browser=chrome
                         '''
                         echo "Selenium tests completed successfully"
@@ -103,14 +108,20 @@ pipeline {
         
         stage('Deploy to Production') {
             when {
-                expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+                expression { params.DEPLOY_ENV == 'production' && currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
             }
             steps {
                 input message: 'Deploy to production?', ok: 'Deploy'
-                sshagent(['your-ssh-credentials-id']) {
+                sshagent(['aws-ec2-key']) {
+                    sh "ssh ec2-user@${EC2_PROD_SERVER} 'cp ${WAR_PATH} ${WAR_PATH}.backup'"
+                    
                     sh """
-                        scp build1.war ubuntu@${EC2_PROD_SERVER}:/opt/mywarfile/build1.war
-                        ssh ubuntu@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
+                        scp login.war ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
+                        ssh ec2-user@${EC2_PROD_SERVER} 'sudo chown tomcat:tomcat ${WAR_PATH} && sudo systemctl restart tomcat'
+                    """
+                    
+                    sh """
+                        timeout 300 bash -c 'until curl -s http://${EC2_PROD_SERVER}:8080/${APP_CONTEXT_PATH} > /dev/null; do sleep 5; done'
                     """
                 }
                 echo "Deployed to production successfully"
@@ -120,22 +131,39 @@ pipeline {
     
     post {
         always {
-            junit '**/target/surefire-reports/*.xml'
-            archiveArtifacts artifacts: '**/target/surefire-reports/*.xml', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'login.war', allowEmptyArchive: true
+            echo "Archived the WAR file for reference"
             
-            script {
-                echo "Stopping Tomcat container..."
-                sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop || echo 'Failed to stop Tomcat, it may not be running'"
-            }
-            
-            sh "rm -f build1.war"
-            echo "Cleaned up downloaded WAR file"
+            sh "docker system prune -f"
+            deleteDir()
         }
         success {
-            echo "Pipeline completed successfully"
+            echo "Pipeline completed successfully. The application has been deployed to ${params.DEPLOY_ENV} environment."
+            notifySuccess()
         }
         failure {
-            echo "Pipeline failed. Please check the logs and test results for more information."
+            echo "Pipeline failed. Please check the logs for more information on what went wrong."
+            notifyFailure()
         }
     }
+}
+
+def notifySuccess() {
+    emailext (
+      subject: "SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+      to: "shre3039@gmail.com"
+    )
+}
+
+def notifyFailure() {
+    emailext (
+      subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+      body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+        <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+      recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+      to: "shre3039@gmail.com"
+    )
 }
