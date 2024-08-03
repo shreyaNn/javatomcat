@@ -38,6 +38,8 @@ pipeline {
             steps {
                 script {
                     try {
+                        sh 'command -v jq || sudo apt-get update && sudo apt-get install -y jq' // Install jq if not present
+                        
                         def latestVersion = sh(script: """
                             curl -s "${NEXUS_URL}/service/rest/v1/search/assets?repository=${NEXUS_REPOSITORY}&group=${ARTIFACT_GROUP}&name=${ARTIFACT_NAME}&version=${env.BUILD_VERSION}" | jq -r '.items[0].version'
                         """, returnStdout: true).trim()
@@ -66,17 +68,12 @@ pipeline {
                     if (!containerRunning) {
                         sh "docker run -d --name ${TEST_CONTAINER_NAME} -p ${TOMCAT_PORT}:8080 tomcat:10-jdk17"
                         echo "Started new ${TEST_CONTAINER_NAME} container"
+                    } else {
+                        echo "Tomcat container ${TEST_CONTAINER_NAME} is already running"
                     }
-                    
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                    
+
                     sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
                     sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
-                    
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    sh """
-                        timeout 300 bash -c 'until curl -s http://localhost:${TOMCAT_PORT} > /dev/null; do sleep 5; done'
-                    """
                     
                     echo "Deployed WAR to test environment"
                 }
@@ -92,8 +89,8 @@ pipeline {
                     try {
                         sh '''
                             echo "Running Selenium tests..."
-                            mvn test -e -X -Dtest=SeleniumTest \
-                            -Dwebdriver.remote.url=http://selenium-hub:4444/wd/hub \
+                            mvn test -e -X -P selenium-tests \
+                            -Dwebdriver.remote.url=http://selenium-hub1:4444/wd/hub \
                             -Dapp.url=http://localhost:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
                             -Dtest.browser=chrome
                         '''
@@ -112,58 +109,38 @@ pipeline {
             }
             steps {
                 input message: 'Deploy to production?', ok: 'Deploy'
-                sshagent(['aws-ec2-key']) {
-                    sh "ssh ec2-user@${EC2_PROD_SERVER} 'cp ${WAR_PATH} ${WAR_PATH}.backup'"
-                    
+                sshagent(['aws-login-mumbai-key']) {
                     sh """
                         scp login.war ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
-                        ssh ec2-user@${EC2_PROD_SERVER} 'sudo chown tomcat:tomcat ${WAR_PATH} && sudo systemctl restart tomcat'
-                    """
-                    
-                    sh """
-                        timeout 300 bash -c 'until curl -s http://${EC2_PROD_SERVER}:8080/${APP_CONTEXT_PATH} > /dev/null; do sleep 5; done'
+                        ssh ec2-user@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
                     """
                 }
-                echo "Deployed to production successfully"
             }
         }
     }
     
     post {
         always {
-            archiveArtifacts artifacts: 'login.war', allowEmptyArchive: true
+            archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
             echo "Archived the WAR file for reference"
-            
-            sh "docker system prune -f"
-            deleteDir()
         }
         success {
-            echo "Pipeline completed successfully. The application has been deployed to ${params.DEPLOY_ENV} environment."
-            notifySuccess()
+            echo "Pipeline succeeded. Sending success email."
+            emailext(
+                to: 'shre3039@gmail.com',
+                subject: "Jenkins Pipeline Success: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded.",
+                attachLog: true
+            )
         }
         failure {
-            echo "Pipeline failed. Please check the logs for more information on what went wrong."
-            notifyFailure()
+            echo "Pipeline failed. Sending failure email."
+            emailext(
+                to: 'shre3039@gmail.com',
+                subject: "Jenkins Pipeline Failure: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Please check the Jenkins logs for more details.",
+                attachLog: true
+            )
         }
     }
-}
-
-def notifySuccess() {
-    emailext (
-      subject: "SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-      body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-        <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-      recipientProviders: [[$class: 'DevelopersRecipientProvider']],
-      to: "shre3039@gmail.com"
-    )
-}
-
-def notifyFailure() {
-    emailext (
-      subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-      body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-        <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-      recipientProviders: [[$class: 'DevelopersRecipientProvider']],
-      to: "shre3039@gmail.com"
-    )
 }
