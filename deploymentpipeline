@@ -28,6 +28,9 @@ pipeline {
                     echo "Building version: ${params.BUILD_VERSION}"
                     echo "Deploying to environment: ${params.DEPLOY_ENV}"
                     echo "Run tests: ${params.RUN_TESTS}"
+                    echo "ARTIFACT_GROUP: ${ARTIFACT_GROUP}"
+                    echo "ARTIFACT_NAME: ${ARTIFACT_NAME}"
+                    echo "BUILD_VERSION: ${params.BUILD_VERSION}"
                 }
             }
         }
@@ -36,19 +39,34 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'command -v jq || sudo apt-get update && sudo apt-get install -y jq'
-                        
-                        def latestVersion = sh(script: """
-                            curl -s "${NEXUS_URL}/service/rest/v1/search/assets?repository=${NEXUS_REPOSITORY}&group=${ARTIFACT_GROUP}&name=${ARTIFACT_NAME}&version=${params.BUILD_VERSION}" | jq -r '.items[0].version'
+                        // List contents of the Nexus repository
+                        sh """
+                            echo "Listing Nexus repository contents:"
+                            curl -s "${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/"
+                        """
+
+                        def mavenMetadata = sh(script: """
+                            curl -s "${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/maven-metadata.xml"
                         """, returnStdout: true).trim()
                         
-                        echo "Latest version found: ${latestVersion}"
+                        def timestamp = sh(script: "echo '${mavenMetadata}' | grep '<timestamp>' | sed 's/.*<timestamp>\\(.*\\)<\\/timestamp>.*/\\1/'", returnStdout: true).trim()
+                        def buildNumber = sh(script: "echo '${mavenMetadata}' | grep '<buildNumber>' | sed 's/.*<buildNumber>\\(.*\\)<\\/buildNumber>.*/\\1/'", returnStdout: true).trim()
+                        
+                        def latestSnapshot = "${timestamp}-${buildNumber}"
+                        
+                        echo "Latest snapshot version: ${latestSnapshot}"
+                        
+                        if (latestSnapshot.isEmpty()) {
+                            error "No snapshot version found in Nexus for ${ARTIFACT_NAME} version ${params.BUILD_VERSION}"
+                        }
+                        
+                        def warFileName = "${ARTIFACT_NAME}-${params.BUILD_VERSION.replace('-SNAPSHOT', '')}-${latestSnapshot}.war"
                         
                         sh """
-                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${ARTIFACT_NAME}-${latestVersion}.war -O login.war
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${warFileName} -O login.war
                         """
                         
-                        echo "Successfully downloaded WAR file"
+                        echo "Successfully downloaded WAR file: ${warFileName}"
                     } catch (Exception e) {
                         error "Failed to download WAR file: ${e.getMessage()}"
                     }
