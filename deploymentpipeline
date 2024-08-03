@@ -18,18 +18,16 @@ pipeline {
     parameters {
         string(name: 'BUILD_VERSION', defaultValue: '1.0-SNAPSHOT', description: 'Version to build')
         choice(name: 'DEPLOY_ENV', choices: ['test', 'production'], description: 'Environment to deploy to')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run Selenium tests')
     }
     
     stages {
         stage('Prepare') {
             steps {
                 script {
-                    if (params.BUILD_VERSION == '1.0-SNAPSHOT') {
-                        env.BUILD_VERSION = sh(script: 'git describe --tags --always', returnStdout: true).trim()
-                    } else {
-                        env.BUILD_VERSION = params.BUILD_VERSION
-                    }
-                    echo "Building version: ${env.BUILD_VERSION}"
+                    echo "Building version: ${params.BUILD_VERSION}"
+                    echo "Deploying to environment: ${params.DEPLOY_ENV}"
+                    echo "Run tests: ${params.RUN_TESTS}"
                 }
             }
         }
@@ -38,16 +36,16 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'command -v jq || sudo apt-get update && sudo apt-get install -y jq' // Install jq if not present
+                        sh 'command -v jq || sudo apt-get update && sudo apt-get install -y jq'
                         
                         def latestVersion = sh(script: """
-                            curl -s "${NEXUS_URL}/service/rest/v1/search/assets?repository=${NEXUS_REPOSITORY}&group=${ARTIFACT_GROUP}&name=${ARTIFACT_NAME}&version=${env.BUILD_VERSION}" | jq -r '.items[0].version'
+                            curl -s "${NEXUS_URL}/service/rest/v1/search/assets?repository=${NEXUS_REPOSITORY}&group=${ARTIFACT_GROUP}&name=${ARTIFACT_NAME}&version=${params.BUILD_VERSION}" | jq -r '.items[0].version'
                         """, returnStdout: true).trim()
                         
                         echo "Latest version found: ${latestVersion}"
                         
                         sh """
-                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${env.BUILD_VERSION}/${ARTIFACT_NAME}-${latestVersion}.war -O login.war
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${ARTIFACT_NAME}-${latestVersion}.war -O login.war
                         """
                         
                         echo "Successfully downloaded WAR file"
@@ -64,23 +62,20 @@ pipeline {
             }
             steps {
                 script {
-                    def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                    if (containerRunning) {
-                        echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
-                        
-                        // Stop the application (optional, depending on your setup)
-                        sh "docker exec ${TEST_CONTAINER_NAME} /usr/local/tomcat/bin/shutdown.sh || true"
-                        
-                        // Deploy the new WAR file
-                        sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
-                        sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
-                        
-                        // Start the application (optional, depending on your setup)
-                        sh "docker exec ${TEST_CONTAINER_NAME} /usr/local/tomcat/bin/startup.sh"
-                        
-                        echo "Deployed new WAR to existing test environment"
-                    } else {
-                        error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually and rerun the pipeline."
+                    try {
+                        def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                        if (containerRunning) {
+                            echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
+                            
+                            sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
+                            sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
+                            
+                            echo "Deployed new WAR to test environment"
+                        } else {
+                            error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
+                        }
+                    } catch (Exception e) {
+                        error "Failed to deploy to test environment: ${e.getMessage()}"
                     }
                 }
             }
@@ -88,7 +83,7 @@ pipeline {
         
         stage('Run Selenium Tests') {
             when {
-                expression { params.DEPLOY_ENV == 'test' }
+                expression { params.DEPLOY_ENV == 'test' && params.RUN_TESTS }
             }
             steps {
                 script {
@@ -102,8 +97,23 @@ pipeline {
                         '''
                         echo "Selenium tests completed successfully"
                     } catch (Exception e) {
-                        echo "Selenium tests failed: ${e.getMessage()}"
-                        error "Selenium test execution failed"
+                        error "Selenium test execution failed: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+        
+        stage('Approve Production Deployment') {
+            when {
+                expression { params.DEPLOY_ENV == 'production' }
+            }
+            steps {
+                script {
+                    def userInput = input(id: 'Confirm', message: 'Deploy to Production?', parameters: [
+                        [$class: 'BooleanParameterDefinition', defaultValue: false, description: 'Deploy to production', name: 'confirm']
+                    ])
+                    if (!userInput) {
+                        error "Production deployment aborted by user"
                     }
                 }
             }
@@ -111,15 +121,21 @@ pipeline {
         
         stage('Deploy to Production') {
             when {
-                expression { params.DEPLOY_ENV == 'production' && currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+                expression { params.DEPLOY_ENV == 'production' }
             }
             steps {
-                input message: 'Deploy to production?', ok: 'Deploy'
-                sshagent(['aws-login-mumbai-key']) {
-                    sh """
-                        scp login.war ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
-                        ssh ec2-user@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
-                    """
+                script {
+                    try {
+                        sshagent(['aws-login-mumbai-key']) {
+                            sh """
+                                scp login.war ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
+                                ssh ec2-user@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
+                            """
+                        }
+                        echo "Successfully deployed to production"
+                    } catch (Exception e) {
+                        error "Failed to deploy to production: ${e.getMessage()}"
+                    }
                 }
             }
         }
@@ -135,7 +151,7 @@ pipeline {
             emailext(
                 to: 'shre3039@gmail.com',
                 subject: "Jenkins Pipeline Success: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded.",
+                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded. Deployed to ${params.DEPLOY_ENV}.",
                 attachLog: true
             )
         }
@@ -144,7 +160,7 @@ pipeline {
             emailext(
                 to: 'shre3039@gmail.com',
                 subject: "Jenkins Pipeline Failure: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Please check the Jenkins logs for more details.",
+                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Environment: ${params.DEPLOY_ENV}. Please check the Jenkins logs for more details.",
                 attachLog: true
             )
         }
