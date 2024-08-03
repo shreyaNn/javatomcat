@@ -1,13 +1,10 @@
 package com.example;
 
-//import javax.servlet.ServletException;
-//import javax.servlet.http.HttpServlet;
-//import javax.servlet.http.HttpServletRequest;
-//import javax.servlet.http.HttpServletResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse; 
+import jakarta.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -32,13 +29,8 @@ public class LoginServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("text/html");
-        response.getWriter().println("<h1>Login Page</h1>");
-        response.getWriter().println("<form method='post'>");
-        response.getWriter().println("Username: <input type='text' name='username'><br>");
-        response.getWriter().println("Password: <input type='password' name='password'><br>");
-        response.getWriter().println("<input type='submit' value='Login'>");
-        response.getWriter().println("</form>");
+        logger.info("Forwarding to login.jsp");
+        request.getRequestDispatcher("/login.jsp").forward(request, response);
     }
 
     @Override
@@ -46,14 +38,17 @@ public class LoginServlet extends HttpServlet {
         String username = request.getParameter("username");
         String password = request.getParameter("password");
 
-        response.setContentType("text/html");
-        if (authenticate(username, password)) {
+        boolean loginSuccess = authenticate(username, password);
+        
+        if (loginSuccess) {
             logger.info("Successful login attempt for user: {}", username);
-            response.getWriter().println("<h2>Login Successful!</h2>");
         } else {
             logger.warn("Failed login attempt for user: {}", username);
-            response.getWriter().println("<h2>Login Failed!</h2>");
         }
+
+        request.setAttribute("loginSuccess", loginSuccess);
+        request.setAttribute("username", username);
+        request.getRequestDispatcher("/loginResult.jsp").forward(request, response);
     }
 
     private boolean authenticate(String username, String password) {
