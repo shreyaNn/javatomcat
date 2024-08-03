@@ -65,17 +65,23 @@ pipeline {
             steps {
                 script {
                     def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                    if (!containerRunning) {
-                        sh "docker run -d --name ${TEST_CONTAINER_NAME} -p ${TOMCAT_PORT}:8080 tomcat:10-jdk17"
-                        echo "Started new ${TEST_CONTAINER_NAME} container"
+                    if (containerRunning) {
+                        echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
+                        
+                        // Stop the application (optional, depending on your setup)
+                        sh "docker exec ${TEST_CONTAINER_NAME} /usr/local/tomcat/bin/shutdown.sh || true"
+                        
+                        // Deploy the new WAR file
+                        sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
+                        sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
+                        
+                        // Start the application (optional, depending on your setup)
+                        sh "docker exec ${TEST_CONTAINER_NAME} /usr/local/tomcat/bin/startup.sh"
+                        
+                        echo "Deployed new WAR to existing test environment"
                     } else {
-                        echo "Tomcat container ${TEST_CONTAINER_NAME} is already running"
+                        error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually and rerun the pipeline."
                     }
-
-                    sh "docker cp login.war ${TEST_CONTAINER_NAME}:${WAR_PATH}"
-                    sh "docker exec ${TEST_CONTAINER_NAME} chown tomcat:tomcat ${WAR_PATH}"
-                    
-                    echo "Deployed WAR to test environment"
                 }
             }
         }
