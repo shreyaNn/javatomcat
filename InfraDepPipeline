@@ -1,0 +1,54 @@
+pipeline {
+    agent {
+        label 'jenkins-agent'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Terraform Operations') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    dir('Infra') {
+                        sh 'terraform init -reconfigure'
+                    
+                        sh 'terraform plan -var-file="prod.tfvars" -out=tfplan'
+                        
+                        input message: 'Apply the terraform plan?', ok: 'Apply'
+                        sh 'terraform show tfplan'  // This will show the plan for review
+                        input message: 'Proceed with apply?', ok: 'Yes'
+                        
+                        sh 'terraform apply -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            node('jenkins-agent') {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    dir('Infra') {
+                        sh 'terraform init -reconfigure'
+                        sh 'terraform output'
+                    }
+                }
+            }
+        }
+    }
+}
