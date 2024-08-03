@@ -107,11 +107,12 @@ pipeline {
             }
             steps {
                 input message: 'Deploy to production?', ok: 'Deploy'
-                ansiblePlaybook(
-                    playbook: 'playbooks/deploy_app.yml',
-                    inventory: 'inventory/inventory.ini',
-                    extras: "-e \"prod_server=${EC2_PROD_SERVER} build_version=${BUILD_VERSION}\""
-                )
+                sshagent(['your-ssh-credentials-id']) {
+                    sh """
+                        scp build1.war ubuntu@${EC2_PROD_SERVER}:/opt/mywarfile/build1.war
+                        ssh ubuntu@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
+                    """
+                }
                 echo "Deployed to production successfully"
             }
         }
