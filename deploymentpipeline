@@ -74,6 +74,16 @@ pipeline {
                 }
             }
         }
+       stage('Verify Downloaded WAR') {
+           steps {
+               script {
+                   echo "Verifying downloaded WAR file:"
+                    sh "ls -l ${env.DOWNLOADED_WAR_FILE}"
+                    sh "md5sum ${env.DOWNLOADED_WAR_FILE}"
+                    sh "stat ${env.DOWNLOADED_WAR_FILE}"
+        }
+    }
+}
         
         stage('Deploy to Test Environment') {
             when {
