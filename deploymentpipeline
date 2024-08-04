@@ -122,7 +122,7 @@ pipeline {
                 script {
                     try {
                         // Ensure we're in the correct directory
-                        dir('/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy') {
+                        dir('/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/login-web-app') {
                             sh '''
                                 echo "Running Selenium tests..."
                                 mvn test -e -X -P selenium-tests \
