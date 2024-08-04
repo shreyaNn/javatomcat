@@ -39,9 +39,8 @@ pipeline {
             steps {
                 script {
                     try {
-                        // List contents of the Nexus repository
+                        echo "Listing Nexus repository contents:"
                         sh """
-                            echo "Listing Nexus repository contents:"
                             curl -s "${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/"
                         """
 
@@ -74,65 +73,58 @@ pipeline {
                 }
             }
         }
-       stage('Verify Downloaded WAR') {
-           steps {
-               script {
-                   echo "Verifying downloaded WAR file:"
+
+        stage('Verify Downloaded WAR') {
+            steps {
+                script {
+                    echo "Verifying downloaded WAR file:"
                     sh "ls -l ${env.DOWNLOADED_WAR_FILE}"
                     sh "md5sum ${env.DOWNLOADED_WAR_FILE}"
                     sh "stat ${env.DOWNLOADED_WAR_FILE}"
-        }
-    }
-} 
-      stage('Deploy to Test Environment') {
-    when {
-        expression { params.DEPLOY_ENV == 'test' }
-    }
-    steps {
-        script {
-            try {
-                def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                if (containerRunning) {
-                    echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
-                    
-                    // Update timestamp of WAR file
-                    sh "touch ${env.DOWNLOADED_WAR_FILE}"
-                    
-                    // Copy new WAR file
-                    sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
-                    
-                    // Verify copy
-                    sh "docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login.war"
-                    
-                    // Set correct permissions
-                    def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
-                    sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
-                    
-                    // Restart Tomcat to ensure new WAR is deployed
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
-                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
-                    
-                    // Wait for Tomcat to start and deploy the WAR
-                    sh "sleep 60"
-                    
-                    // Verify deployment
-                    sh """
-                        echo "Verifying WAR deployment..."
-                        docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/
-                        docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login
-                        docker exec ${TEST_CONTAINER_NAME} find /usr/local/tomcat/logs -type f -name '*.log' -exec tail -n 50 {} +
-                    """
-                    
-                    echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to test environment as login.war"
-                } else {
-                    error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
                 }
-            } catch (Exception e) {
-                error "Failed to deploy to test environment: ${e.getMessage()}"
             }
-        }
-    }
-} 
+        } 
+
+        stage('Deploy to Test Environment') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
+            steps {
+                script {
+                    try {
+                        def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                        if (containerRunning) {
+                            echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
+                            
+                            sh "touch ${env.DOWNLOADED_WAR_FILE}"
+                            sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
+                            sh "docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login.war"
+                            
+                            def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
+                            sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
+                            
+                            sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                            sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                            
+                            sh "sleep 60"
+                            
+                            sh """
+                                echo "Verifying WAR deployment..."
+                                docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/
+                                docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login
+                                docker exec ${TEST_CONTAINER_NAME} find /usr/local/tomcat/logs -type f -name '*.log' -exec tail -n 50 {} +
+                            """
+                            
+                            echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to test environment as login.war"
+                        } else {
+                            error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
+                        }
+                    } catch (Exception e) {
+                        error "Failed to deploy to test environment: ${e.getMessage()}"
+                    }
+                }
+            }
+        } 
        
         stage('Run Selenium Tests') {
             when {
@@ -141,14 +133,18 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Ensure we're in the correct directory
+                        echo "Starting Selenium tests..."
+                        echo "Selenium Grid URL: http://selenium-hub1:4444/wd/hub"
+                        echo "Application URL: http://host.docker.internal:${TOMCAT_PORT}/${APP_CONTEXT_PATH}"
+
                         dir('/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/login-web-app') {
                             sh '''
                                 echo "Running Selenium tests..."
                                 mvn test -e -X -P selenium-tests \
                                 -Dwebdriver.remote.url=http://selenium-hub1:4444/wd/hub \
-                                -Dapp.url=http://localhost:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
-                                -Dtest.browser=chrome
+                                -Dapp.url=http://host.docker.internal:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
+                                -Dtest.browser=chrome \
+                                -Dselenium.grid.enabled=true
                             '''
                         }
                         echo "Selenium tests completed successfully"
