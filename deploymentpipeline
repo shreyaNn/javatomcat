@@ -83,47 +83,57 @@ pipeline {
                     sh "stat ${env.DOWNLOADED_WAR_FILE}"
         }
     }
-}
-        
-        stage('Deploy to Test Environment') {
-            when {
-                expression { params.DEPLOY_ENV == 'test' }
-            }
-            steps {
-                script {
-                    try {
-                        def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
-                        if (containerRunning) {
-                            echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
+} 
+      stage('Deploy to Test Environment') {
+    when {
+        expression { params.DEPLOY_ENV == 'test' }
+    }
+    steps {
+        script {
+            try {
+                def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                if (containerRunning) {
+                    echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
                     
-                            // Copy new WAR file
-                            sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
+                    // Update timestamp of WAR file
+                    sh "touch ${env.DOWNLOADED_WAR_FILE}"
                     
-                            // Set correct permissions
-                            def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
-                            sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
+                    // Copy new WAR file
+                    sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
                     
-                            // Wait for Tomcat to detect and deploy the new WAR
-                            sh "sleep 30"
+                    // Verify copy
+                    sh "docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login.war"
                     
-                            // Verify deployment
-                            sh """
-                                echo "Verifying WAR deployment..."
-                                docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/
-                                docker exec ${TEST_CONTAINER_NAME} cat /usr/local/tomcat/logs/catalina.out | tail -n 50
-                            """
+                    // Set correct permissions
+                    def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
+                    sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
                     
-                            echo "Deployed new WAR to test environment as login.war"
-                        } else {
-                            error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
-                        }
-                    } catch (Exception e) {
-                        error "Failed to deploy to test environment: ${e.getMessage()}"
-                    }
+                    // Restart Tomcat to ensure new WAR is deployed
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                    sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                    
+                    // Wait for Tomcat to start and deploy the WAR
+                    sh "sleep 60"
+                    
+                    // Verify deployment
+                    sh """
+                        echo "Verifying WAR deployment..."
+                        docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/
+                        docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login
+                        docker exec ${TEST_CONTAINER_NAME} find /usr/local/tomcat/logs -type f -name '*.log' -exec tail -n 50 {} +
+                    """
+                    
+                    echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to test environment as login.war"
+                } else {
+                    error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
                 }
+            } catch (Exception e) {
+                error "Failed to deploy to test environment: ${e.getMessage()}"
             }
         }
-        
+    }
+} 
+       
         stage('Run Selenium Tests') {
             when {
                 expression { params.DEPLOY_ENV == 'test' && params.RUN_TESTS }
