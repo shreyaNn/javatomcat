@@ -75,33 +75,10 @@ pipeline {
             }
         }
         
-       
-        
-        stage('Run Selenium Tests') {
-            when {
-                expression { params.DEPLOY_ENV == 'test' && params.RUN_TESTS }
-            }
-            steps {
-                script {
-                    try {
-                        sh '''
-                            echo "Running Selenium tests..."
-                            mvn test -e -X -P selenium-tests \
-                            -Dwebdriver.remote.url=http://selenium-hub1:4444/wd/hub \
-                            -Dapp.url=http://localhost:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
-                            -Dtest.browser=chrome
-                        '''
-                        echo "Selenium tests completed successfully"
-                    } catch (Exception e) {
-                        error "Selenium test execution failed: ${e.getMessage()}"
-                    }
-                }
-            }
-        }
         stage('Deploy to Test Environment') {
             when {
                 expression { params.DEPLOY_ENV == 'test' }
-          }
+            }
             steps {
                 script {
                     try {
@@ -109,10 +86,10 @@ pipeline {
                         if (containerRunning) {
                             echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
                     
-                          // Copy new WAR file
+                            // Copy new WAR file
                             sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
                     
-                          // Set correct permissions
+                            // Set correct permissions
                             def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
                             sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
                     
@@ -127,15 +104,67 @@ pipeline {
                             """
                     
                             echo "Deployed new WAR to test environment as login.war"
-                    }   else {
+                        } else {
                             error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
-                }
-            }       catch (Exception e) {
+                        }
+                    } catch (Exception e) {
                         error "Failed to deploy to test environment: ${e.getMessage()}"
+                    }
+                }
             }
         }
-    }
-}
+        
+        stage('Run Selenium Tests') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' && params.RUN_TESTS }
+            }
+            steps {
+                script {
+                    try {
+                        // Ensure we're in the correct directory
+                        dir('/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy') {
+                            sh '''
+                                echo "Running Selenium tests..."
+                                mvn test -e -X -P selenium-tests \
+                                -Dwebdriver.remote.url=http://selenium-hub1:4444/wd/hub \
+                                -Dapp.url=http://localhost:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
+                                -Dtest.browser=chrome
+                            '''
+                        }
+                        echo "Selenium tests completed successfully"
+                    } catch (Exception e) {
+                        echo "Selenium test execution failed. Error: ${e.getMessage()}"
+                        echo "Stacktrace: ${e.getStackTrace().join('\n')}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
+            steps {
+                script {
+                    def warFileInfo = sh(script: """
+                        docker exec ${TEST_CONTAINER_NAME} ls -l --time-style='+%Y-%m-%d %H:%M:%S' /usr/local/tomcat/webapps/login.war | awk '{print \$6" "\$7" "\$8}'
+                    """, returnStdout: true).trim()
+                    
+                    echo "WAR file last modified: ${warFileInfo}"
+                    
+                    def warFileDate = warFileInfo.split()[0]
+                    def currentDate = new Date().format('yyyy-MM-dd')
+                    
+                    if (warFileDate == currentDate) {
+                        echo "WAR file successfully deployed on ${warFileDate}"
+                    } else {
+                        error "WAR file deployment date (${warFileDate}) does not match current date (${currentDate})"
+                    }
+                }
+            }
+        }
+        
         stage('Approve Production Deployment') {
             when {
                 expression { params.DEPLOY_ENV == 'production' }
