@@ -204,13 +204,12 @@ pipeline {
             steps {
                 script {
                     try {
-                        sshagent(['aws-login-mumbai-key']) {
-                            sh """
-                                scp ${env.DOWNLOADED_WAR_FILE} ec2-user@${EC2_PROD_SERVER}:${WAR_PATH}
-                                ssh ec2-user@${EC2_PROD_SERVER} 'sudo systemctl restart tomcat'
-                            """
-                        }
-                        echo "Successfully deployed to production"
+                        ansiblePlaybook(
+                            playbook: 'ansible/playbooks/deploy_tomcat.yml',
+                            inventory: 'ansible/inventory/production',
+                            extras: "-e 'war_file_path=${env.WORKSPACE}/${env.DOWNLOADED_WAR_FILE} tomcat_port=${TOMCAT_PORT}'"
+                        )
+                        echo "Successfully deployed to production using Ansible"
                     } catch (Exception e) {
                         error "Failed to deploy to production: ${e.getMessage()}"
                     }
