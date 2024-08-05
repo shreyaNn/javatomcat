@@ -216,7 +216,7 @@ pipeline {
         }
     }
 }
-    
+ }   
     post {
         always {
             archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
