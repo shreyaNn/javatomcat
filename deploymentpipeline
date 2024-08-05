@@ -197,26 +197,25 @@ pipeline {
             }
         }
         
-        stage('Deploy to Production') {
-            when {
-                expression { params.DEPLOY_ENV == 'production' }
-            }
-            steps {
-                script {
-                    try {
-                        ansiblePlaybook(
-                            playbook: 'ansible/playbooks/deploy_tomcat.yml',
-                            inventory: 'ansible/inventory/production',
-                            extras: "-e 'war_file_path=${env.WORKSPACE}/${env.DOWNLOADED_WAR_FILE} tomcat_port=${TOMCAT_PORT}'"
-                        )
-                        echo "Successfully deployed to production using Ansible"
-                    } catch (Exception e) {
-                        error "Failed to deploy to production: ${e.getMessage()}"
-                    }
-                }
+       stage('Deploy to Production') {
+           when {
+               expression { params.DEPLOY_ENV == 'production' }
+    }
+           steps {
+               script {
+                   try {
+                       ansiblePlaybook(
+                           playbook: 'ansible/playbooks/deploy_tomcat.yml',
+                           inventory: 'ansible/inventory/production',
+                           extras: "-e 'war_file_path=${env.WORKSPACE}/${env.DOWNLOADED_WAR_FILE} tomcat_port=${TOMCAT_PORT}'"
+                )
+                echo "Successfully deployed to production using Ansible"
+            }      catch (Exception e) {
+                       error "Failed to deploy to production: ${e.getMessage()}"
             }
         }
     }
+}
     
     post {
         always {
