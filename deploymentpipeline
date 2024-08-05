@@ -157,6 +157,24 @@ pipeline {
             }
         }
 
+         stage('Check Ansible Version') {
+            steps {
+                sh 'ansible --version'
+            }
+        }
+
+        stage('Verify Playbook') {
+            steps {
+                sh 'cat ansible/playbooks/deploy_tomcat.yml'
+            }
+        }
+
+        stage('Check Permissions') {
+            steps {
+                sh 'ls -l ansible/roles'
+                sh 'ls -l ansible/playbooks'
+            }
+        }
         stage('Verify Deployment') {
             when {
                 expression { params.DEPLOY_ENV == 'test' }
