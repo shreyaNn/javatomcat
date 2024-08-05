@@ -223,10 +223,12 @@ pipeline {
                script {
                    try {
                        ansiblePlaybook(
-                           playbook: 'ansible/playbooks/deploy_tomcat.yml',
-                           inventory: 'ansible/inventory/production',
-                           extras: "-e 'war_file_path=${env.WORKSPACE}/${env.DOWNLOADED_WAR_FILE} tomcat_port=${TOMCAT_PORT}'"
-                )
+                           playbook: "${env.WORKSPACE}/ansible/playbooks/deploy_tomcat.yml",
+                           inventory: "${env.WORKSPACE}/ansible/inventory/production",
+                           extras: "-e 'war_file_path=${warFile}' -e 'ansible_roles_path=${env.WORKSPACE}/ansible/roles'",
+                           colorized: true,
+                           verbose: true
+                       )
                 echo "Successfully deployed to production using Ansible"
             }      catch (Exception e) {
                        error "Failed to deploy to production: ${e.getMessage()}"
