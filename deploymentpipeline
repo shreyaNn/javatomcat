@@ -216,41 +216,20 @@ pipeline {
         }
         
         stage('Deploy to Production') {
-            when {
-                expression { params.DEPLOY_ENV == 'production' }
-              }
             steps {
                 script {
-                try {
-                // Find the latest WAR file
-                    def warFile = sh(script: "ls -t ${env.WORKSPACE}/*.war | head -1", returnStdout: true).trim()
-                
-                // Debug information
-                    sh """
-                    echo "Workspace: ${env.WORKSPACE}"
-                    echo "Ansible playbook path: ${env.WORKSPACE}/ansible/playbooks/deploy_tomcat.yml"
-                    echo "Inventory path: ${env.WORKSPACE}/ansible/inventory/production"
-                    echo "WAR file: ${warFile}"
-                    ls -R ${env.WORKSPACE}/ansible
-                """
-                    withEnv(["ANSIBLE_ROLES_PATH=${env.WORKSPACE}/ansible/roles"]) {
-                            // Run the Ansible playbook
-                        ansiblePlaybook(
-                        playbook: "${env.WORKSPACE}/ansible/playbooks/deploy_tomcat.yml",
-                        inventory: "${env.WORKSPACE}/ansible/inventory/production",
-                        extras: "-e war_file_path=${warFile}",
-                        colorized: true
-                            )
-                        }
-                                  
-                    echo "Successfully deployed to production using Ansible"
-            }   catch (Exception e) {
-                    error "Failed to deploy to production: ${e.getMessage()}"
+                    withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh """
+                        ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
+                        --private-key=\$SSH_KEY \
+                        -e "ansible_user=ec2-user" \
+                        -e "war_file_path=\${WORKSPACE}/target/*.war"
+                        """
+                    }
+                }
             }
         }
     }
-}  
-}
     post {
         always {
             archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
