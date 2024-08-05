@@ -238,8 +238,7 @@ pipeline {
                         playbook: "${env.WORKSPACE}/ansible/playbooks/deploy_tomcat.yml",
                         inventory: "${env.WORKSPACE}/ansible/inventory/production",
                         extras: "-e 'war_file_path=${warFile}' -e 'ansible_roles_path=${env.WORKSPACE}/ansible/roles'",
-                        colorized: true,
-                        verbose: true
+                        colorized: true
                 )
                 echo "Successfully deployed to production using Ansible"
             }   catch (Exception e) {
