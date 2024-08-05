@@ -233,14 +233,16 @@ pipeline {
                     echo "WAR file: ${warFile}"
                     ls -R ${env.WORKSPACE}/ansible
                 """
-                
-                    ansiblePlaybook(
+                    withEnv(["ANSIBLE_ROLES_PATH=${env.WORKSPACE}/ansible/roles"]) {
+                            // Run the Ansible playbook
+                        ansiblePlaybook(
                         playbook: "${env.WORKSPACE}/ansible/playbooks/deploy_tomcat.yml",
                         inventory: "${env.WORKSPACE}/ansible/inventory/production",
                         extras: "-e war_file_path=${warFile}",
-                        colorized: true,
-                        ansibleConfig: "${env.WORKSPACE}/ansible/ansible.cfg"
-                )
+                        colorized: true
+                            )
+                        }
+                                  
                     echo "Successfully deployed to production using Ansible"
             }   catch (Exception e) {
                     error "Failed to deploy to production: ${e.getMessage()}"
