@@ -220,7 +220,7 @@ pipeline {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
-                        echo "Current Directory: $(pwd)"
+                        echo "Current Directory: \$(pwd)"
                         echo "Listing ansible directory:"
                         ls -la ansible
                         echo "Listing roles directory:"
