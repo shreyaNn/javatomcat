@@ -215,33 +215,35 @@ pipeline {
             }
         }
         
-        stage('Deploy to Production') {
+       stage('Deploy to Production') {
+            when {
+                expression { params.DEPLOY_ENV == 'production' }
+            }
             steps {
                 script {
-                    def warFile = sh(script: "ls -t login-web-app-*.war | head -1", returnStdout: true).trim()
-                    echo "WAR file to deploy: ${warFile}"
-            
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
                         echo "Current Directory: \$(pwd)"
+                        echo "Contents of ansible.cfg:"
+                        cat ansible/ansible.cfg
                         echo "Contents of inventory file:"
                         cat ansible/inventory/production
                         echo "Contents of playbook file:"
                         cat ansible/playbooks/deploy_tomcat.yml
                         echo "Contents of roles directory:"
                         ls -R ansible/roles
-                        echo "WAR file to deploy: ${warFile}"
+                        echo "WAR file to deploy: ${env.DOWNLOADED_WAR_FILE}"
                         ansible-playbook -vvv \
                         -i ansible/inventory/production \
                         ansible/playbooks/deploy_tomcat.yml \
-                        -e "war_file_path=\$(pwd)/${warFile}"
+                        -e "war_file_path=\$(pwd)/${env.DOWNLOADED_WAR_FILE}" \
+                        --private-key=\$SSH_KEY
                         """
+                    }
+                }
             }
         }
     }
-}
-    } // closing brace for stages
-    
         post {
             always {
                 archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
