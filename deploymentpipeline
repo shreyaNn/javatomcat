@@ -229,10 +229,11 @@ pipeline {
                         ls -la ansible/playbooks
                         echo "Listing inventory directory:"
                         ls -la ansible/inventory
+                        echo "Downloaded WAR file: ${env.DOWNLOADED_WAR_FILE}"
                         ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
                         --private-key=\$SSH_KEY \
                         -e "ansible_user=ec2-user" \
-                        -e "war_file_path=\${WORKSPACE}/target/*.war"
+                        -e "war_file_path=${env.DOWNLOADED_WAR_FILE}"
                         """
                     }
                 }
