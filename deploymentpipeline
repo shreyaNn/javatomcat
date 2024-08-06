@@ -220,7 +220,7 @@ pipeline {
                 script {
                     def warFile = sh(script: "ls -t login-web-app-*.war | head -1", returnStdout: true).trim()
                     echo "WAR file to deploy: ${warFile}"
-                    
+            
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
                         echo "Current Directory: \$(pwd)"
@@ -228,10 +228,12 @@ pipeline {
                         cat ansible/inventory/production
                         echo "Contents of playbook file:"
                         cat ansible/playbooks/deploy_tomcat.yml
+                        echo "Contents of roles directory:"
+                        ls -R ansible/roles
                         echo "WAR file to deploy: ${warFile}"
-                        ansible-playbook -vvv -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
-                        --private-key=\$SSH_KEY \
-                        -e "ansible_user=ec2-user" \
+                        ansible-playbook -vvv \
+                        -i ansible/inventory/production \
+                        ansible/playbooks/deploy_tomcat.yml \
                         -e "war_file_path=\$(pwd)/${warFile}"
                         """
             }
