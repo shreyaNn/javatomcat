@@ -218,52 +218,50 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
-                    script {
-                        def warFile = sh(script: "ls -t login-web-app-*.war | head -1", returnStdout: true).trim()
+                    def warFile = sh(script: "ls -t login-web-app-*.war | head -1", returnStdout: true).trim()
+                    echo "WAR file to deploy: ${warFile}"
+                    
+                    withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh """
+                        echo "Current Directory: \$(pwd)"
+                        echo "Contents of inventory file:"
+                        cat ansible/inventory/production
+                        echo "Contents of playbook file:"
+                        cat ansible/playbooks/deploy_tomcat.yml
                         echo "WAR file to deploy: ${warFile}"
-                        
-                        withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
-                            sh """
-                            echo "Current Directory: \$(pwd)"
-                            echo "Contents of inventory file:"
-                            cat ansible/inventory/production
-                            echo "Contents of playbook file:"
-                            cat ansible/playbooks/deploy_tomcat.yml
-                            echo "WAR file to deploy: ${warFile}"
-                            ansible-playbook -vvv -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
-                            --private-key=\$SSH_KEY \
-                            -e "ansible_user=ec2-user" \
-                            -e "war_file_path=\$(pwd)/${warFile}"
-                            """
-                    }
-                }
+                        ansible-playbook -vvv -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
+                        --private-key=\$SSH_KEY \
+                        -e "ansible_user=ec2-user" \
+                        -e "war_file_path=\$(pwd)/${warFile}"
+                        """
             }
-        }
-}
-    
-    post {
-        always {
-            archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
-            echo "Archived the WAR file for reference"
-        }
-        success {
-            echo "Pipeline succeeded. Sending success email."
-            emailext(
-                to: 'shre3039@gmail.com',
-                subject: "Jenkins Pipeline Success: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded. Deployed to ${params.DEPLOY_ENV}.",
-                attachLog: true
-            )
-        }
-        failure {
-            echo "Pipeline failed. Sending failure email."
-            emailext(
-                to: 'shre3039@gmail.com',
-                subject: "Jenkins Pipeline Failure: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Environment: ${params.DEPLOY_ENV}. Please check the Jenkins logs for more details.",
-                attachLog: true
-            )
         }
     }
 }
-
+    } // closing brace for stages
+    
+        post {
+            always {
+                archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
+                echo "Archived the WAR file for reference"
+            }
+            success {
+                echo "Pipeline succeeded. Sending success email."
+                emailext(
+                    to: 'shre3039@gmail.com',
+                    subject: "Jenkins Pipeline Success: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                    body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded. Deployed to ${params.DEPLOY_ENV}.",
+                    attachLog: true
+                )
+            }
+            failure {
+                echo "Pipeline failed. Sending failure email."
+                emailext(
+                    to: 'shre3039@gmail.com',
+                    subject: "Jenkins Pipeline Failure: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                    body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Environment: ${params.DEPLOY_ENV}. Please check the Jenkins logs for more details.",
+                    attachLog: true
+                )
+            }
+        }
+    }
