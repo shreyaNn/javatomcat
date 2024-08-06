@@ -224,16 +224,12 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
                         echo "Current Directory: \$(pwd)"
-                        echo "Listing ansible directory:"
-                        ls -la ansible
-                        echo "Listing roles directory:"
-                        ls -la ansible/roles
-                        echo "Listing playbooks directory:"
-                        ls -la ansible/playbooks
-                        echo "Listing inventory directory:"
-                        ls -la ansible/inventory
+                        echo "Contents of inventory file:"
+                        cat ansible/inventory/production
+                        echo "Contents of playbook file:"
+                        cat ansible/playbooks/deploy_tomcat.yml
                         echo "WAR file to deploy: ${warFile}"
-                        ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
+                        ansible-playbook -vvv -i ansible/inventory/production ansible/playbooks/deploy_tomcat.yml \
                         --private-key=\$SSH_KEY \
                         -e "ansible_user=ec2-user" \
                         -e "war_file_path=\$(pwd)/${warFile}"
