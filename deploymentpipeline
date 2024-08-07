@@ -224,16 +224,24 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
                         echo "WAR file to deploy: ${env.DOWNLOADED_WAR_FILE}"
-                
-                        # Copy WAR file to EC2 instance
-                        scp -i \$SSH_KEY ${env.DOWNLOADED_WAR_FILE} ubuntu@65.1.147.19:/tmp/login.war
-                
-                        # Run Ansible playbook for Tomcat setup and deployment
+                        
+                        # Change to the Ansible directory
+                        cd ${ANSIBLE_DIR}
+                        
+                        # Run Ansible playbook for Tomcat installation
                         ansible-playbook -vvv \
                         -i inventory/inventory.ini \
-                        playbooks/apache2_Setup.yml \
+                        playbooks/install_tomcat.yml \
                         --private-key=\$SSH_KEY \
-                        -e "war_file_path=/tmp/login.war"
+                        -e "ansible_user=ubuntu"
+                        
+                        # Copy WAR file to EC2 instance
+                        scp -i \$SSH_KEY ${env.DOWNLOADED_WAR_FILE} ubuntu@${EC2_PROD_SERVER}:/tmp/login.war
+                        
+                        # Move WAR file to Tomcat webapps directory
+                        ssh -i \$SSH_KEY ubuntu@${EC2_PROD_SERVER} 'sudo mv /tmp/login.war /opt/tomcat/webapps/'
+                        
+                        echo "Tomcat installed and WAR file copied. Please configure Tomcat settings manually on the EC2 instance."
                         """
                     }
                 }
