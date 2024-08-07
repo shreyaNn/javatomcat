@@ -216,15 +216,12 @@ pipeline {
         }
         
        stage('Deploy to Production') {
-            when {
-                expression { params.DEPLOY_ENV == 'production' }
-            }
             steps {
                 script {
                     try {
                         sh """
-                            ansible-playbook -i ansible/inventory/hosts ansible/playbooks/tomcat_setup.yml \
-                            --extra-vars "artifact_group=${ARTIFACT_GROUP} artifact_name=${ARTIFACT_NAME} build_version=${params.BUILD_VERSION} ec2_prod_server=${EC2_PROD_SERVER} war_path=${WAR_PATH}"
+                            ansible-playbook -i inventory/inventory.ini playbooks/tomcat_setup.yml \
+                            --extra-vars "war_file_path=${env.DOWNLOADED_WAR_FILE}"
                         """
                         echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to production environment as login.war"
                     } catch (Exception e) {
