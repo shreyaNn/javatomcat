@@ -1,0 +1,101 @@
+pipeline {
+    agent { label 'jenkins-agent' }
+    environment {
+        scannerHome = tool 'sonar-scanner'
+        SONARQUBE_URL = 'http://localhost:9000'
+        NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials'
+        JENKINS_SONAR = credentials('sonartoken')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    dir('login-web-app') {
+                        sh 'mvn clean package -DskipTests -B --settings /root/.m2/settings.xml'
+                        sh 'mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B --settings /root/.m2/settings.xml -U'
+                        sh 'ls -R target'  // Debug: List contents of target directory
+
+                    }
+                }
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    dir('login-web-app') {
+                        withSonarQubeEnv('SonarQube') {
+                            def scannerHome = tool 'sonar-scanner'
+                            sh """
+                            ${scannerHome}/bin/sonar-scanner -X \
+                            -Dsonar.projectBaseDir=. \
+                            -Dsonar.working.directory=.scannerwork \
+                            -Dsonar.java.binaries=\$(pwd)/target/classes \
+                            -Dsonar.java.libraries=\$(pwd)/target/dependency \
+                            -Dsonar.sources=src/main/java \
+                            -Dsonar.tests=src/test/java \
+                            -Dsonar.java.test.binaries=\$(pwd)/target/test-classes \
+                            -Dsonar.test.exclusions=**/selenium/**/*,**/*IT.java \
+                            -Dsonar.coverage.exclusions=**/*
+                            """
+                       
+                        }
+                    }
+                }
+            }
+        }
+        stage('Unit Tests') {
+            steps {
+                script {
+                    dir('login-web-app') {
+                        sh 'mvn test -P unit-tests'
+                        sh 'mvn surefire-report:report-only -P unit-tests'
+                        sh 'ls -R target'
+                        junit '**/target/surefire-reports/*.xml'
+                    }
+                }
+            }
+        }
+        stage('Push to Nexus') {
+            steps {
+                script {
+                    dir('login-web-app') {
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'localhost:8081',
+                            groupId: pom.groupId,
+                            version: version,
+                            repository: 'maven-snapshots',
+                            credentialsId: env.NEXUS_CREDENTIALS_ID,
+                            artifacts: [
+                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                            ]
+                        )
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo 'Pipeline finished.'
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}

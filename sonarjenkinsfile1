@@ -1,0 +1,43 @@
+pipeline {
+    agent { label 'jenkins-agent' } // Replace 'your-agent-label' with the actual label of your Jenkins agent node
+    environment {
+        scannerHome = tool 'sonar-scanner'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    try {
+                        git branch: 'main', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    try {
+                        def scannerHome = tool 'sonar-scanner'
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=javatomcat \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=http://localhost:9000 \
+                                -Dsonar.login=${env.JENKINS_SONAR}
+                            """
+                        }
+                    } catch (Exception e) {
+                        echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
+                        error "SonarQube Analysis failed"
+                    }
+                }
+            }
+        }
+    }
+}

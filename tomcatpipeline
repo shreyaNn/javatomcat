@@ -1,0 +1,91 @@
+pipeline {
+    agent { label 'jenkins-agent' }
+    environment {
+        MAVEN_HOME = tool 'Maven 3'
+        PATH = "${MAVEN_HOME}/bin:${env.PATH}"
+        TOMCAT_URL = 'http://tomcat:8888/login-web-app-1.0-SNAPSHOT'
+        TOMCAT_WEBAPPS = '/usr/local/tomcat/webapps'
+        NEXUS_URL = 'http://nexus:8081'
+        SELENIUM_HUB = 'http://selenium-hub:4444/wd/hub'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    try {
+                        git branch: 'feature/userlogin', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
+                }
+            }
+        }
+        
+        stage('Build WAR') {
+            steps {
+                dir('login-web-app') {
+                    sh """
+                    mvn clean package -B \
+                    -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                    -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/maven-public/
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Tomcat') {
+            steps {
+                sh "docker cp login-web-app/target/login-web-app-1.0-SNAPSHOT.war tomcat:${TOMCAT_WEBAPPS}/login-web-app.war"
+                // Improved wait for deployment
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitUntil {
+                        script {
+                            def r = sh(script: "curl -s -o /dev/null -w '%{http_code}' ${TOMCAT_URL}", returnStdout: true).trim()
+                            return r == "200"
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Update Test Configuration') {
+            steps {
+                sh """
+                sed -i 's|http://localhost:8888/login-web-app|${TOMCAT_URL}|g' login-web-app/src/test/java/com/example/*.java
+                sed -i 's|http://localhost:4444/wd/hub|${SELENIUM_HUB}|g' login-web-app/src/test/java/com/example/*.java
+                """
+            }
+        }
+        
+        stage('Run Selenium Tests') {
+            steps {
+                dir('login-web-app') {
+                    sh """
+                    mvn test -B \
+                    -Dmaven.repo.local=${WORKSPACE}/.m2/repository \
+                    -Dwebdriver.remote.url=${SELENIUM_HUB} \
+                    -Dapplication.url=${TOMCAT_URL}
+                    """
+                }
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
+        }     
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+        }
+        failure {
+            echo 'Pipeline failed!'
+            // Add more detailed error reporting here
+        }
+        success {
+            echo 'Pipeline succeeded!'
+        }
+    }
+}

@@ -1,0 +1,260 @@
+pipeline {
+    agent {
+        label 'ansible-deploy'
+    }
+    
+    environment {
+        NEXUS_URL = "http://localhost:8081"
+        NEXUS_REPOSITORY = "maven-snapshots"
+        ARTIFACT_GROUP = "com.example"
+        ARTIFACT_NAME = "login-web-app"
+        EC2_PROD_SERVER = "ec2-65-1-147-19.ap-south-1.compute.amazonaws.com"
+        TEST_CONTAINER_NAME = "tomcat"
+        WAR_PATH = "/usr/local/tomcat/webapps/login.war"
+        APP_CONTEXT_PATH = "login"
+        TOMCAT_PORT = "8888"
+    }
+    
+    parameters {
+        string(name: 'BUILD_VERSION', defaultValue: '1.0-SNAPSHOT', description: 'Version to build')
+        choice(name: 'DEPLOY_ENV', choices: ['test', 'production'], description: 'Environment to deploy to')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run Selenium tests')
+    }
+    
+    stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    echo "Building version: ${params.BUILD_VERSION}"
+                    echo "Deploying to environment: ${params.DEPLOY_ENV}"
+                    echo "Run tests: ${params.RUN_TESTS}"
+                    echo "ARTIFACT_GROUP: ${ARTIFACT_GROUP}"
+                    echo "ARTIFACT_NAME: ${ARTIFACT_NAME}"
+                    echo "BUILD_VERSION: ${params.BUILD_VERSION}"
+                }
+            }
+        }
+
+        stage('Pull from Nexus') {
+            steps {
+                script {
+                    try {
+                        echo "Listing Nexus repository contents:"
+                        sh """
+                            curl -s "${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/"
+                        """
+
+                        def mavenMetadata = sh(script: """
+                            curl -s "${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/maven-metadata.xml"
+                        """, returnStdout: true).trim()
+                        
+                        def timestamp = sh(script: "echo '${mavenMetadata}' | grep '<timestamp>' | sed 's/.*<timestamp>\\(.*\\)<\\/timestamp>.*/\\1/'", returnStdout: true).trim()
+                        def buildNumber = sh(script: "echo '${mavenMetadata}' | grep '<buildNumber>' | sed 's/.*<buildNumber>\\(.*\\)<\\/buildNumber>.*/\\1/'", returnStdout: true).trim()
+                        
+                        def latestSnapshot = "${timestamp}-${buildNumber}"
+                        
+                        echo "Latest snapshot version: ${latestSnapshot}"
+                        
+                        if (latestSnapshot.isEmpty()) {
+                            error "No snapshot version found in Nexus for ${ARTIFACT_NAME} version ${params.BUILD_VERSION}"
+                        }
+                        
+                        def warFileName = "${ARTIFACT_NAME}-${params.BUILD_VERSION.replace('-SNAPSHOT', '')}-${latestSnapshot}.war"
+                        
+                        sh """
+                            wget ${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/${ARTIFACT_GROUP.replace('.', '/')}/${ARTIFACT_NAME}/${params.BUILD_VERSION}/${warFileName} -O ${warFileName}
+                        """
+                        
+                        echo "Successfully downloaded WAR file: ${warFileName}"
+                        env.DOWNLOADED_WAR_FILE = warFileName
+                    } catch (Exception e) {
+                        error "Failed to download WAR file: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+
+        stage('Verify Downloaded WAR') {
+            steps {
+                script {
+                    echo "Verifying downloaded WAR file:"
+                    sh "ls -l ${env.DOWNLOADED_WAR_FILE}"
+                    sh "md5sum ${env.DOWNLOADED_WAR_FILE}"
+                    sh "stat ${env.DOWNLOADED_WAR_FILE}"
+                }
+            }
+        } 
+
+        stage('Deploy to Test Environment') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
+            steps {
+                script {
+                    try {
+                        def containerRunning = sh(script: "docker ps -q -f name=${TEST_CONTAINER_NAME}", returnStatus: true) == 0
+                        if (containerRunning) {
+                            echo "Tomcat container ${TEST_CONTAINER_NAME} is running"
+                            
+                            sh "touch ${env.DOWNLOADED_WAR_FILE}"
+                            sh "docker cp ${env.DOWNLOADED_WAR_FILE} ${TEST_CONTAINER_NAME}:/usr/local/tomcat/webapps/login.war"
+                            sh "docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login.war"
+                            
+                            def tomcatUser = sh(script: "docker exec ${TEST_CONTAINER_NAME} ps -o user= -p 1", returnStdout: true).trim()
+                            sh "docker exec ${TEST_CONTAINER_NAME} chown ${tomcatUser}:${tomcatUser} /usr/local/tomcat/webapps/login.war"
+                            
+                            sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh stop"
+                            sh "docker exec ${TEST_CONTAINER_NAME} catalina.sh start"
+                            
+                            sh "sleep 60"
+                            
+                            sh """
+                                echo "Verifying WAR deployment..."
+                                docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/
+                                docker exec ${TEST_CONTAINER_NAME} ls -l /usr/local/tomcat/webapps/login
+                                docker exec ${TEST_CONTAINER_NAME} find /usr/local/tomcat/logs -type f -name '*.log' -exec tail -n 50 {} +
+                            """
+                            
+                            echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to test environment as login.war"
+                        } else {
+                            error "Tomcat container ${TEST_CONTAINER_NAME} is not running. Please start the container manually."
+                        }
+                    } catch (Exception e) {
+                        error "Failed to deploy to test environment: ${e.getMessage()}"
+                    }
+                }
+            }
+        } 
+       
+        stage('Run Selenium Tests') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' && params.RUN_TESTS }
+            }
+            steps {
+                script {
+                    try {
+                        echo "Starting Selenium tests..."
+                        echo "Selenium Grid URL: http://selenium-hub1:4444/wd/hub"
+                        echo "Application URL: http://host.docker.internal:${TOMCAT_PORT}/${APP_CONTEXT_PATH}"
+
+                        dir('/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/login-web-app') {
+                            sh '''
+                                echo "Running Selenium tests..."
+                                mvn test -e -X -P selenium-tests \
+                                -Dwebdriver.remote.url=http://selenium-hub1:4444/wd/hub \
+                                -Dapp.url=http://host.docker.internal:${TOMCAT_PORT}/${APP_CONTEXT_PATH} \
+                                -Dtest.browser=chrome \
+                                -Dselenium.grid.enabled=true
+                            '''
+                        }
+                        echo "Selenium tests completed successfully"
+                    } catch (Exception e) {
+                        echo "Selenium test execution failed. Error: ${e.getMessage()}"
+                        echo "Stacktrace: ${e.getStackTrace().join('\n')}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+         stage('Check Ansible Version') {
+            steps {
+                sh 'ansible --version'
+            }
+        }
+
+        stage('Verify Playbook') {
+            steps {
+                sh 'cat ansible/playbooks/deploy_tomcat.yml'
+            }
+        }
+
+        stage('Check Permissions') {
+            steps {
+                sh 'ls -l ansible/roles'
+                sh 'ls -l ansible/playbooks'
+            }
+        }
+        stage('Verify Deployment') {
+            when {
+                expression { params.DEPLOY_ENV == 'test' }
+            }
+            steps {
+                script {
+                    def warFileInfo = sh(script: """
+                        docker exec ${TEST_CONTAINER_NAME} ls -l --time-style='+%Y-%m-%d %H:%M:%S' /usr/local/tomcat/webapps/login.war | awk '{print \$6" "\$7" "\$8}'
+                    """, returnStdout: true).trim()
+                    
+                    echo "WAR file last modified: ${warFileInfo}"
+                    
+                    def warFileDate = warFileInfo.split()[0]
+                    def currentDate = new Date().format('yyyy-MM-dd')
+                    
+                    if (warFileDate == currentDate) {
+                        echo "WAR file successfully deployed on ${warFileDate}"
+                    } else {
+                        error "WAR file deployment date (${warFileDate}) does not match current date (${currentDate})"
+                    }
+                }
+            }
+        }
+        
+        stage('Approve Production Deployment') {
+            when {
+                expression { params.DEPLOY_ENV == 'production' }
+            }
+            steps {
+                script {
+                    def userInput = input(id: 'Confirm', message: 'Deploy to Production?', parameters: [
+                        [$class: 'BooleanParameterDefinition', defaultValue: false, description: 'Deploy to production', name: 'confirm']
+                    ])
+                    if (!userInput) {
+                        error "Production deployment aborted by user"
+                    }
+                }
+            }
+        }
+        
+       stage('Deploy to Production') {
+            steps {
+                script {
+                    try {
+                        sh """
+                        cd /home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/ansibletom
+
+                        ansible-playbook -i inventory/inventory.ini playbooks/tomcat_setup.yml --extra-vars war_file_path=/home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/login-web-app-1.0-20240803.060535-3.war 
+
+                        """
+                        echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to production environment as login.war"
+                    } catch (Exception e) {
+                        error "Failed to deploy to production: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+    }
+        post {
+            always {
+                archiveArtifacts artifacts: '**/login.war', allowEmptyArchive: true
+                echo "Archived the WAR file for reference"
+            }
+            success {
+                echo "Pipeline succeeded. Sending success email."
+                emailext(
+                    to: 'shre3039@gmail.com',
+                    subject: "Jenkins Pipeline Success: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                    body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has succeeded. Deployed to ${params.DEPLOY_ENV}.",
+                    attachLog: true
+                )
+            }
+            failure {
+                echo "Pipeline failed. Sending failure email."
+                emailext(
+                    to: 'shre3039@gmail.com',
+                    subject: "Jenkins Pipeline Failure: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
+                    body: "The Jenkins pipeline ${env.JOB_NAME} build number ${env.BUILD_NUMBER} has failed. Environment: ${params.DEPLOY_ENV}. Please check the Jenkins logs for more details.",
+                    attachLog: true
+                )
+            }
+        }
+    }

@@ -1,0 +1,95 @@
+pipeline {
+    agent { label 'jenkins-agent' }
+    environment {
+        scannerHome = tool 'sonar-scanner'
+        SONARQUBE_URL = 'http://localhost:9000'
+        NEXUS_URL = 'http://localhost:8081/repository/maven-snapshots/'
+        NEXUS_CREDENTIALS_ID = 'nexus-credentials'
+        JENKINS_SONAR = credentials('sonartoken')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    try {
+                        git branch: 'main', url: 'https://github.com/shreyaNn/javatomcat.git'
+                    } catch (Exception e) {
+                        echo "Failed to checkout. Error: ${e.getMessage()}"
+                        error "Repository checkout failed"
+                    }
+                }
+            }
+        }
+        stage('Build and Unit Test') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package -B --settings /root/.m2/settings.xml'
+                        sh 'ls -ltr target/'
+                        sh 'mvn test -B --settings /root/.m2/settings.xml'
+                        junit '**/target/surefire-reports/TEST-*.xml'
+                    } catch (Exception e) {
+                        echo "Build or unit tests failed. Error: ${e.getMessage()}"
+                        echo "Stack trace: ${e.getStackTrace()[0]}"
+                        error "Build or unit tests failed"
+                    }
+                }
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    try {
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=javatomcat \
+                                -Dsonar.host.url=${SONARQUBE_URL} \
+                                -Dsonar.token=${JENKINS_SONAR}
+                            """
+                        }
+                    } catch (Exception e) {
+                        echo "SonarQube Analysis failed. Error: ${e.getMessage()}"
+                        error "SonarQube Analysis failed"
+                    }
+                }
+            }
+        }
+        stage('Push to Nexus') {
+            steps {
+                script {
+                    try {
+                        def pom = readMavenPom file: 'pom.xml'
+                        def artifactId = pom.artifactId
+                        def version = pom.version
+                        def packaging = pom.packaging
+                        def filePath = "target/${artifactId}-${version}.${packaging}"
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'localhost:8081',
+                            groupId: pom.groupId,
+                            version: version,
+                            repository: 'maven-snapshots',
+                            credentialsId: env.NEXUS_CREDENTIALS_ID,
+                            artifacts: [
+                                [artifactId: artifactId, classifier: '', file: filePath, type: packaging]
+                            ]
+                        )
+                    } catch (Exception e) {
+                        echo "Push to Nexus failed. Error: ${e.getMessage()}"
+                        error "Push to Nexus failed"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
