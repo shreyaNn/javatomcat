@@ -226,22 +226,16 @@ pipeline {
                         echo "WAR file to deploy: ${env.DOWNLOADED_WAR_FILE}"
                         
                         # Change to the Ansible directory
-                        cd ${ANSIBLE_DIR}
+                        cd /home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/ansibletom
                         
                         # Run Ansible playbook for Tomcat installation
                         ansible-playbook -vvv \
                         -i inventory/inventory.ini \
-                        playbooks/install_tomcat.yml \
+                        playbooks/tomcat_setup.yml \
                         --private-key=\$SSH_KEY \
-                        -e "ansible_user=ubuntu"
+                        -e "ansible_user=ubuntu war_file_path=${env.DOWNLOADED_WAR_FILE}"
                         
-                        # Copy WAR file to EC2 instance
-                        scp -i \$SSH_KEY ${env.DOWNLOADED_WAR_FILE} ubuntu@${EC2_PROD_SERVER}:/tmp/login.war
-                        
-                        # Move WAR file to Tomcat webapps directory
-                        ssh -i \$SSH_KEY ubuntu@${EC2_PROD_SERVER} 'sudo mv /tmp/login.war /opt/tomcat/webapps/'
-                        
-                        echo "Tomcat installed and WAR file copied. Please configure Tomcat settings manually on the EC2 instance."
+                        echo "Tomcat installed and WAR file deployed. Please check the EC2 instance to ensure everything is configured correctly."
                         """
                     }
                 }
