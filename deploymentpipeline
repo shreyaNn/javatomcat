@@ -220,6 +220,8 @@ pipeline {
                 script {
                     try {
                         sh """
+                        cd /home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/ansibletom
+
                            ansible-playbook -i inventory/inventory.ini playbooks/tomcat_setup.yml --extra-vars war_file_path=login-web-app-1.0-20240803.060535-3.war
 
                         """
