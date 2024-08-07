@@ -223,7 +223,7 @@ pipeline {
                 script {
                     try {
                         sh """
-                            ansible-playbook -i ansible/inventory/hosts ansible/playbooks/deploy_java_app.yml \
+                            ansible-playbook -i ansible/inventory/hosts ansible/playbooks/tomcat_setup.yml \
                             --extra-vars "artifact_group=${ARTIFACT_GROUP} artifact_name=${ARTIFACT_NAME} build_version=${params.BUILD_VERSION} ec2_prod_server=${EC2_PROD_SERVER} war_path=${WAR_PATH}"
                         """
                         echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to production environment as login.war"
