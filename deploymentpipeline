@@ -223,22 +223,17 @@ pipeline {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
                         sh """
-                        echo "Current Directory: \$(pwd)"
-                        echo "Contents of ansible.cfg:"
-                        cat ansible/ansible.cfg
-                        echo "Contents of inventory file:"
-                        cat ansible/inventory/production
-                        echo "Contents of playbook file:"
-                        cat ansible/playbooks/deploy_tomcat.yml
-                        echo "Contents of roles directory:"
-                        ls -R ansible/roles
                         echo "WAR file to deploy: ${env.DOWNLOADED_WAR_FILE}"
+                
+                        # Copy WAR file to EC2 instance
+                        scp -i \$SSH_KEY ${env.DOWNLOADED_WAR_FILE} ubuntu@65.1.147.19:/tmp/login.war
+                
+                        # Run Ansible playbook for Tomcat setup and deployment
                         ansible-playbook -vvv \
-                        -i ansible/inventory/production \
-                        ansible/playbooks/deploy_tomcat.yml \
-                        -e "war_file_path=\$(pwd)/${env.DOWNLOADED_WAR_FILE}" \
+                        -i inventory/inventory.ini \
+                        playbooks/apache2_Setup.yml \
                         --private-key=\$SSH_KEY \
-                        -u ec2-user
+                        -e "war_file_path=/tmp/login.war"
                         """
                     }
                 }
