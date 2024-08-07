@@ -221,22 +221,14 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'aws-login-mumbai-key', keyFileVariable: 'SSH_KEY')]) {
+                    try {
                         sh """
-                        echo "WAR file to deploy: ${env.DOWNLOADED_WAR_FILE}"
-                        
-                        # Change to the Ansible directory
-                        cd /home/jenkins/ansible-agent/workspace/Deploytestprod/JenkinsDeploy/ansibletom
-                        
-                        # Run Ansible playbook for Tomcat installation
-                        ansible-playbook -vvv \
-                        -i inventory/inventory.ini \
-                        playbooks/tomcat_setup.yml \
-                        --private-key=\$SSH_KEY \
-                        -e "ansible_user=ubuntu war_file_path=${env.DOWNLOADED_WAR_FILE}"
-                        
-                        echo "Tomcat installed and WAR file deployed. Please check the EC2 instance to ensure everything is configured correctly."
+                            ansible-playbook -i ansible/inventory/hosts ansible/playbooks/deploy_java_app.yml \
+                            --extra-vars "artifact_group=${ARTIFACT_GROUP} artifact_name=${ARTIFACT_NAME} build_version=${params.BUILD_VERSION} ec2_prod_server=${EC2_PROD_SERVER} war_path=${WAR_PATH}"
                         """
+                        echo "Deployed new WAR ${env.DOWNLOADED_WAR_FILE} to production environment as login.war"
+                    } catch (Exception e) {
+                        error "Failed to deploy to production: ${e.getMessage()}"
                     }
                 }
             }
